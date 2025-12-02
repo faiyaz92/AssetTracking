@@ -40,6 +40,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -116,7 +117,10 @@ fun RoomDetailScreen(
                 TopAppBar(
                     title = { 
                         Text(
-                            state.roomDetail?.name ?: "Room",
+                            state.roomDetail?.name ?: "Location",
+                            style = MaterialTheme.typography.titleLarge.copy(
+                                fontWeight = FontWeight.Bold
+                            ),
                             color = Color.White,
                             textAlign = TextAlign.Center
                         ) 
@@ -129,7 +133,12 @@ fun RoomDetailScreen(
                                 tint = Color.White
                             )
                         }
-                    }
+                    },
+                    colors = TopAppBarDefaults.smallTopAppBarColors(
+                        containerColor = Color.Transparent,
+                        titleContentColor = Color.White,
+                        navigationIconContentColor = Color.White
+                    )
                 )
             }
         },
