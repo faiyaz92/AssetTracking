@@ -1,0 +1,108 @@
+package com.example.assettracking.data.repository
+
+import com.example.assettracking.data.local.dao.AssetDao
+import com.example.assettracking.data.local.entity.AssetEntity
+import com.example.assettracking.data.local.model.AssetWithRoomTuple
+import com.example.assettracking.domain.model.AssetSummary
+import com.example.assettracking.domain.repository.AssetRepository
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+import javax.inject.Inject
+import javax.inject.Singleton
+
+@Singleton
+class AssetRepositoryImpl @Inject constructor(
+    private val assetDao: AssetDao
+) : AssetRepository {
+
+    override fun observeAssets(): Flow<List<AssetSummary>> =
+        assetDao.observeAssets().map { items -> items.map { it.toDomainModel() } }
+
+    override suspend fun createAsset(code: String, name: String, details: String?, baseRoomId: Long?): Boolean {
+        val normalizedCode = code.trim()
+        if (normalizedCode.isBlank()) return false
+        val duplicate = assetDao.getAssetByCode(normalizedCode)
+        if (duplicate != null) return false
+        val entity = AssetEntity(
+            code = normalizedCode,
+            name = name.trim(),
+            details = details?.trim(),
+            baseRoomId = baseRoomId,
+            currentRoomId = baseRoomId // Initially, current room is the same as base room
+        )
+        assetDao.insert(entity)
+        return true
+    }
+
+    override suspend fun updateAsset(
+        assetId: Long,
+        code: String,
+        name: String,
+        details: String?
+    ): Boolean {
+        val existing = assetDao.getAssetById(assetId) ?: return false
+        val normalizedCode = code.trim()
+        if (normalizedCode.isBlank()) return false
+        val duplicate = assetDao.getAssetByCode(normalizedCode)
+        if (duplicate != null && duplicate.id != assetId) return false
+        val updated = existing.copy(
+            code = normalizedCode,
+            name = name.trim(),
+            details = details?.trim()
+        )
+        assetDao.update(updated)
+        return true
+    }
+
+    override suspend fun deleteAsset(assetId: Long): Boolean {
+        val existing = assetDao.getAssetById(assetId) ?: return false
+        assetDao.delete(existing)
+        return true
+    }
+
+    override suspend fun assignAssetToRoom(assetCode: String, roomId: Long): Boolean {
+        val asset = assetDao.getAssetByCode(assetCode.trim()) ?: return false
+        assetDao.attachAssetToRoom(asset.id, roomId)
+        return true
+    }
+
+    override suspend fun detachAssetFromRoom(assetId: Long): Boolean {
+        val existing = assetDao.getAssetById(assetId) ?: return false
+        assetDao.detachAssetFromRoom(existing.id)
+        return true
+    }
+
+    override suspend fun findAssetByCode(assetCode: String): AssetSummary? {
+        val asset = assetDao.getAssetByCode(assetCode.trim()) ?: return null
+        return asset.toDomainModel()
+    }
+
+    override suspend fun updateCurrentRoom(assetId: Long, currentRoomId: Long): Boolean {
+        val existing = assetDao.getAssetById(assetId) ?: return false
+        val updated = existing.copy(currentRoomId = currentRoomId)
+        assetDao.update(updated)
+        return true
+    }
+
+    private fun AssetWithRoomTuple.toDomainModel(): AssetSummary = AssetSummary(
+        id = assetId,
+        code = assetCode,
+        name = assetName,
+        details = assetDetails,
+        baseRoomId = assetBaseRoomId,
+        baseRoomName = baseRoomName,
+        currentRoomId = assetCurrentRoomId,
+        currentRoomName = currentRoomName
+    )
+
+    private fun AssetEntity.toDomainModel(): AssetSummary = AssetSummary(
+        id = id,
+        code = code,
+        name = name,
+        details = details,
+        baseRoomId = baseRoomId,
+        baseRoomName = null,
+        currentRoomId = currentRoomId,
+        currentRoomName = null
+    )
+}
