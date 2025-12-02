@@ -8,5 +8,6 @@ data class AssetMovement(
     val fromRoomName: String?,
     val toRoomId: Long,
     val toRoomName: String,
+    val condition: String?,
     val timestamp: Long
 )

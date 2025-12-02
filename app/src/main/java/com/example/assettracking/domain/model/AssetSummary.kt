@@ -5,6 +5,7 @@ data class AssetSummary(
     val code: String,
     val name: String,
     val details: String?,
+    val condition: String?,
     val baseRoomId: Long?,
     val baseRoomName: String?,
     val currentRoomId: Long?,

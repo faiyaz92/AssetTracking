@@ -36,6 +36,7 @@ class RoomRepositoryImpl @Inject constructor(
                             code = tuple.assetCode,
                             name = tuple.assetName,
                             details = tuple.assetDetails,
+                            condition = tuple.assetCondition,
                             baseRoomId = tuple.assetBaseRoomId,
                             baseRoomName = tuple.baseRoomName,
                             currentRoomId = tuple.assetCurrentRoomId,
@@ -81,6 +82,7 @@ class RoomRepositoryImpl @Inject constructor(
                 code = asset.code,
                 name = asset.name,
                 details = asset.details,
+                condition = asset.condition,
                 baseRoomId = asset.baseRoomId,
                 baseRoomName = null, // TODO: join to get base room name
                 currentRoomId = room.id,

@@ -18,7 +18,7 @@ class AssetRepositoryImpl @Inject constructor(
     override fun observeAssets(): Flow<List<AssetSummary>> =
         assetDao.observeAssets().map { items -> items.map { it.toDomainModel() } }
 
-    override suspend fun createAsset(code: String, name: String, details: String?, baseRoomId: Long?): Boolean {
+    override suspend fun createAsset(code: String, name: String, details: String?, condition: String?, baseRoomId: Long?): Boolean {
         val normalizedCode = code.trim()
         if (normalizedCode.isBlank()) return false
         val duplicate = assetDao.getAssetByCode(normalizedCode)
@@ -27,6 +27,7 @@ class AssetRepositoryImpl @Inject constructor(
             code = normalizedCode,
             name = name.trim(),
             details = details?.trim(),
+            condition = condition?.trim(),
             baseRoomId = baseRoomId,
             currentRoomId = baseRoomId // Initially, current room is the same as base room
         )
@@ -38,7 +39,8 @@ class AssetRepositoryImpl @Inject constructor(
         assetId: Long,
         code: String,
         name: String,
-        details: String?
+        details: String?,
+        condition: String?
     ): Boolean {
         val existing = assetDao.getAssetById(assetId) ?: return false
         val normalizedCode = code.trim()
@@ -48,7 +50,8 @@ class AssetRepositoryImpl @Inject constructor(
         val updated = existing.copy(
             code = normalizedCode,
             name = name.trim(),
-            details = details?.trim()
+            details = details?.trim(),
+            condition = condition?.trim()
         )
         assetDao.update(updated)
         return true
@@ -62,6 +65,17 @@ class AssetRepositoryImpl @Inject constructor(
 
     override suspend fun assignAssetToRoom(assetCode: String, roomId: Long): Boolean {
         val asset = assetDao.getAssetByCode(assetCode.trim()) ?: return false
+        assetDao.attachAssetToRoom(asset.id, roomId)
+        return true
+    }
+
+    override suspend fun assignAssetToRoomWithCondition(assetCode: String, roomId: Long, condition: String?): Boolean {
+        val asset = assetDao.getAssetByCode(assetCode.trim()) ?: return false
+        // Update condition if provided
+        if (condition != null) {
+            val updatedAsset = asset.copy(condition = condition.trim())
+            assetDao.update(updatedAsset)
+        }
         assetDao.attachAssetToRoom(asset.id, roomId)
         return true
     }
@@ -89,6 +103,7 @@ class AssetRepositoryImpl @Inject constructor(
         code = assetCode,
         name = assetName,
         details = assetDetails,
+        condition = assetCondition,
         baseRoomId = assetBaseRoomId,
         baseRoomName = baseRoomName,
         currentRoomId = assetCurrentRoomId,
@@ -100,6 +115,7 @@ class AssetRepositoryImpl @Inject constructor(
         code = code,
         name = name,
         details = details,
+        condition = condition,
         baseRoomId = baseRoomId,
         baseRoomName = null,
         currentRoomId = currentRoomId,

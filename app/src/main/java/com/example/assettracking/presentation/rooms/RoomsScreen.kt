@@ -159,8 +159,8 @@ fun RoomsScreen(
                     .background(
                         brush = Brush.horizontalGradient(
                             colors = listOf(
-                                Color(0xFF1E40AF), // Professional blue
-                                Color(0xFF3B82F6)  // Lighter blue
+                                Color(0xFF1E40AF), // Deep Blue - Match toolbar
+                                Color(0xFF06B6D4)  // Teal - Match toolbar
                             )
                         )
                     )

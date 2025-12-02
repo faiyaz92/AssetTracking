@@ -40,6 +40,8 @@ data class AssetEntity(
     val name: String,
     @ColumnInfo(name = "details")
     val details: String? = null,
+    @ColumnInfo(name = "condition")
+    val condition: String? = null,
     @ColumnInfo(name = "baseRoomId")
     val baseRoomId: Long? = null,
     @ColumnInfo(name = "currentRoomId")

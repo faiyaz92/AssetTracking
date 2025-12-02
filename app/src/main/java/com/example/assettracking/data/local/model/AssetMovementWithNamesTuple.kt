@@ -17,6 +17,8 @@ data class AssetMovementWithNamesTuple(
     val toRoomId: Long,
     @ColumnInfo(name = "toRoomName")
     val toRoomName: String,
+    @ColumnInfo(name = "condition")
+    val condition: String?,
     @ColumnInfo(name = "timestamp")
     val timestamp: Long
 )

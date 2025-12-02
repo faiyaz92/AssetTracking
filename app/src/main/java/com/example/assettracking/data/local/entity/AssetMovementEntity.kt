@@ -48,6 +48,8 @@ data class AssetMovementEntity(
     val fromRoomId: Long? = null,
     @ColumnInfo(name = "toRoomId")
     val toRoomId: Long,
+    @ColumnInfo(name = "condition")
+    val condition: String? = null,
     @ColumnInfo(name = "timestamp")
     val timestamp: Long
 )

@@ -46,8 +46,18 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.assettracking.domain.model.RoomSummary
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanOptions
 
 data class DashboardItem(
     val title: String,
@@ -61,8 +71,20 @@ data class DashboardItem(
 fun HomeScreen(
     onOpenRooms: () -> Unit,
     onOpenAssets: () -> Unit,
-    onOpenAuditTrail: () -> Unit
+    onOpenAuditTrail: () -> Unit,
+    onQuickScan: () -> Unit,
+    rooms: List<RoomSummary> = emptyList(),
+    onAssetMoved: (String, Long, String) -> Unit = { _, _, _ -> }
 ) {
+    var showQuickScanDialog by remember { mutableStateOf(false) }
+
+    if (showQuickScanDialog) {
+        QuickScanDialog(
+            rooms = rooms,
+            onDismiss = { showQuickScanDialog = false },
+            onScanComplete = onAssetMoved
+        )
+    }
     val dashboardItems = listOf(
         DashboardItem(
             title = "Rooms",
@@ -119,7 +141,7 @@ fun HomeScreen(
                     Color(0xFFEF4444)
                 )
             ),
-            onClick = { /* TODO: Implement quick scan */ }
+            onClick = { showQuickScanDialog = true }
         ),
         DashboardItem(
             title = "Analytics",
@@ -351,4 +373,135 @@ private fun DashboardCard(item: DashboardItem) {
             }
         }
     }
+}
+
+@Composable
+fun QuickScanDialog(
+    rooms: List<RoomSummary>,
+    onDismiss: () -> Unit,
+    onScanComplete: (String, Long, String) -> Unit
+) {
+    var scannedCode by remember { mutableStateOf<String?>(null) }
+    var selectedRoomId by remember { mutableStateOf<Long?>(null) }
+    var condition by remember { mutableStateOf("") }
+    var showConditionDialog by remember { mutableStateOf(false) }
+
+    val context = LocalContext.current
+    val scannerLauncher = rememberLauncherForActivityResult(
+        contract = ScanContract()
+    ) { result ->
+        val contents = result.contents
+        if (contents != null) {
+            scannedCode = contents
+            showConditionDialog = true
+        }
+    }
+
+    val scanOptions = remember {
+        ScanOptions().apply {
+            setDesiredBarcodeFormats(ScanOptions.CODE_128)
+            setPrompt("Scan asset barcode")
+            setCameraId(0)
+            setBeepEnabled(true)
+            setOrientationLocked(false)
+        }
+    }
+
+    if (showConditionDialog && scannedCode != null) {
+        AlertDialog(
+            onDismissRequest = { showConditionDialog = false },
+            title = { Text("Asset Scanned") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Text("Asset Code: $scannedCode")
+
+                    OutlinedTextField(
+                        value = condition,
+                        onValueChange = { condition = it },
+                        label = { Text("Condition Description") },
+                        placeholder = { Text("Describe the asset's condition") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+
+                    Text(
+                        "Select destination room:",
+                        style = MaterialTheme.typography.titleSmall
+                    )
+
+                    rooms.forEach { room ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = selectedRoomId == room.id,
+                                onClick = { selectedRoomId = room.id }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text(room.name, style = MaterialTheme.typography.bodyMedium)
+                                room.description?.let {
+                                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val roomId = selectedRoomId
+                        if (roomId != null) {
+                            onScanComplete(scannedCode!!, roomId, condition)
+                            showConditionDialog = false
+                            onDismiss()
+                        }
+                    },
+                    enabled = selectedRoomId != null
+                ) {
+                    Text("Move Asset")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showConditionDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Quick Scan") },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    "Scan an asset barcode to quickly move it to a different room",
+                    textAlign = TextAlign.Center
+                )
+
+                Button(
+                    onClick = { scannerLauncher.launch(scanOptions) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.QrCodeScanner, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Start Scanning")
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close")
+            }
+        }
+    )
 }

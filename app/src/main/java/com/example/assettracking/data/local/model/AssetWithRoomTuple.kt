@@ -11,6 +11,8 @@ data class AssetWithRoomTuple(
     val assetName: String,
     @ColumnInfo(name = "assetDetails")
     val assetDetails: String?,
+    @ColumnInfo(name = "assetCondition")
+    val assetCondition: String?,
     @ColumnInfo(name = "assetBaseRoomId")
     val assetBaseRoomId: Long?,
     @ColumnInfo(name = "baseRoomName")
@@ -30,6 +32,8 @@ data class RoomAssetTuple(
     val assetName: String,
     @ColumnInfo(name = "assetDetails")
     val assetDetails: String?,
+    @ColumnInfo(name = "assetCondition")
+    val assetCondition: String?,
     @ColumnInfo(name = "assetBaseRoomId")
     val assetBaseRoomId: Long?,
     @ColumnInfo(name = "baseRoomName")

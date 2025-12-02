@@ -40,8 +40,8 @@ class AssetListViewModel @Inject constructor(
 
     fun onEvent(event: AssetListEvent) {
         when (event) {
-            is AssetListEvent.CreateAsset -> createAsset(event.code, event.name, event.details, event.baseRoomId)
-            is AssetListEvent.UpdateAsset -> updateAsset(event.id, event.code, event.name, event.details)
+            is AssetListEvent.CreateAsset -> createAsset(event.code, event.name, event.details, event.condition, event.baseRoomId)
+            is AssetListEvent.UpdateAsset -> updateAsset(event.id, event.code, event.name, event.details, event.condition)
             is AssetListEvent.DeleteAsset -> deleteAsset(event.id)
             is AssetListEvent.UpdateSearch -> updateSearch(event.query)
             AssetListEvent.ClearMessage -> _uiState.update { it.copy(message = null) }
@@ -67,18 +67,18 @@ class AssetListViewModel @Inject constructor(
             .launchIn(viewModelScope)
     }
 
-    private fun createAsset(code: String, name: String, details: String?, baseRoomId: Long?) {
+    private fun createAsset(code: String, name: String, details: String?, condition: String?, baseRoomId: Long?) {
         viewModelScope.launch {
-            val result = createAssetUseCase(code, name, details, baseRoomId)
+            val result = createAssetUseCase(code, name, details, condition, baseRoomId)
             result.onFailure { error ->
                 _uiState.update { it.copy(message = UiMessage(error.message ?: "Unable to create asset")) }
             }
         }
     }
 
-    private fun updateAsset(assetId: Long, code: String, name: String, details: String?) {
+    private fun updateAsset(assetId: Long, code: String, name: String, details: String?, condition: String?) {
         viewModelScope.launch {
-            val result = updateAssetUseCase(assetId, code, name, details)
+            val result = updateAssetUseCase(assetId, code, name, details, condition)
             result.onFailure { error ->
                 _uiState.update { it.copy(message = UiMessage(error.message ?: "Unable to update asset")) }
             }

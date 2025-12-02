@@ -265,14 +265,15 @@ fun AssetsScreen(
             initialCode = asset?.code.orEmpty(),
             initialName = asset?.name.orEmpty(),
             initialDetails = asset?.details.orEmpty(),
+            initialCondition = asset?.condition.orEmpty(),
             initialBaseRoomId = asset?.baseRoomId,
             rooms = state.rooms,
             onDismiss = { showAssetDialog = false },
-            onConfirm = { code, name, details, baseRoomId ->
+            onConfirm = { code, name, details, condition, baseRoomId ->
                 if (asset == null) {
-                    viewModel.onEvent(AssetListEvent.CreateAsset(code, name, details, baseRoomId))
+                    viewModel.onEvent(AssetListEvent.CreateAsset(code, name, details, condition, baseRoomId))
                 } else {
-                    viewModel.onEvent(AssetListEvent.UpdateAsset(asset.id, code, name, details))
+                    viewModel.onEvent(AssetListEvent.UpdateAsset(asset.id, code, name, details, condition))
                 }
                 showAssetDialog = false
             }
@@ -326,6 +327,38 @@ private fun AssetCard(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+
+            // Asset Condition
+            asset.condition?.takeIf { it.isNotBlank() }?.let { condition ->
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Start,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(24.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color(0xFF10B981).copy(alpha = 0.1f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "C",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF10B981)
+                            )
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = condition,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
 
             // Location Info
@@ -451,14 +484,16 @@ private fun AssetFormDialog(
     initialCode: String,
     initialName: String,
     initialDetails: String,
+    initialCondition: String,
     initialBaseRoomId: Long?,
     rooms: List<RoomSummary>,
     onDismiss: () -> Unit,
-    onConfirm: (String, String, String?, Long?) -> Unit
+    onConfirm: (String, String, String?, String?, Long?) -> Unit
 ) {
     val code = rememberSaveable(initialCode) { mutableStateOf(initialCode) }
     val name = rememberSaveable(initialName) { mutableStateOf(initialName) }
     val details = rememberSaveable(initialDetails) { mutableStateOf(initialDetails) }
+    val condition = rememberSaveable(initialCondition) { mutableStateOf(initialCondition) }
     val baseRoomId = remember { mutableStateOf(initialBaseRoomId) }
 
     AlertDialog(
@@ -487,6 +522,12 @@ private fun AssetFormDialog(
                     shape = RoundedCornerShape(12.dp)
                 )
                 OutlinedTextField(
+                    value = condition.value,
+                    onValueChange = { condition.value = it },
+                    label = { Text("Condition (optional)") },
+                    shape = RoundedCornerShape(12.dp)
+                )
+                OutlinedTextField(
                     value = rooms.find { it.id == baseRoomId.value }?.name ?: "No base room",
                     onValueChange = {},
                     label = { Text("Base room (optional)") },
@@ -502,6 +543,7 @@ private fun AssetFormDialog(
                         code.value,
                         name.value,
                         details.value.takeIf { it.isNotBlank() },
+                        condition.value.takeIf { it.isNotBlank() },
                         baseRoomId.value
                     )
                 },

@@ -21,7 +21,7 @@ interface AssetDao {
     suspend fun delete(asset: AssetEntity)
 
     @Query(
-        "SELECT a.id AS assetId, a.code AS assetCode, a.name AS assetName, a.details AS assetDetails, " +
+        "SELECT a.id AS assetId, a.code AS assetCode, a.name AS assetName, a.details AS assetDetails, a.condition AS assetCondition, " +
             "a.baseRoomId AS assetBaseRoomId, br.name AS baseRoomName, " +
             "a.currentRoomId AS assetCurrentRoomId, cr.name AS currentRoomName " +
             "FROM assets a " +

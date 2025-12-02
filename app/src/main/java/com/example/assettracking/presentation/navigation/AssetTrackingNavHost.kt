@@ -1,7 +1,9 @@
 package com.example.assettracking.presentation.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -13,6 +15,7 @@ import com.example.assettracking.presentation.roomdetail.RoomDetailViewModel
 import com.example.assettracking.presentation.rooms.RoomsScreen
 import com.example.assettracking.presentation.tabs.AuditTrailScreen
 import com.example.assettracking.presentation.tabs.HomeScreen
+import com.example.assettracking.presentation.tabs.viewmodel.HomeViewModel
 
 object Destinations {
     const val Home = "home"
@@ -37,10 +40,17 @@ fun AssetTrackingNavHost(navController: NavHostController) {
         startDestination = Routes.Home
     ) {
         composable(Routes.Home) {
+            val viewModel: HomeViewModel = hiltViewModel()
+            val uiState by viewModel.uiState.collectAsStateWithLifecycle()
             HomeScreen(
                 onOpenRooms = { navController.navigate(Routes.Rooms) },
                 onOpenAssets = { navController.navigate(Routes.Assets) },
-                onOpenAuditTrail = { navController.navigate(Routes.AuditTrail) }
+                onOpenAuditTrail = { navController.navigate(Routes.AuditTrail) },
+                onQuickScan = { /* Not used */ },
+                rooms = uiState.rooms,
+                onAssetMoved = { assetCode: String, roomId: Long, condition: String ->
+                    viewModel.assignAssetToRoom(assetCode, roomId, condition)
+                }
             )
         }
         composable(Routes.Rooms) {

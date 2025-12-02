@@ -23,17 +23,19 @@ class AssetMovementRepositoryImpl @Inject constructor(
                     fromRoomName = tuple.fromRoomName,
                     toRoomId = tuple.toRoomId,
                     toRoomName = tuple.toRoomName,
+                    condition = tuple.condition,
                     timestamp = tuple.timestamp
                 )
             }
         }
     }
 
-    override suspend fun createMovement(assetId: Long, fromRoomId: Long?, toRoomId: Long) {
+    override suspend fun createMovement(assetId: Long, fromRoomId: Long?, toRoomId: Long, condition: String?) {
         val entity = AssetMovementEntity(
             assetId = assetId,
             fromRoomId = fromRoomId,
             toRoomId = toRoomId,
+            condition = condition,
             timestamp = System.currentTimeMillis()
         )
         assetMovementDao.insert(entity)

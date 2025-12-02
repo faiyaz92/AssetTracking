@@ -316,6 +316,38 @@ private fun AssetInRoomCard(
                 )
             }
 
+            // Asset Condition
+            asset.condition?.takeIf { it.isNotBlank() }?.let { condition ->
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Start,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(24.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color(0xFF10B981).copy(alpha = 0.1f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "C",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF10B981)
+                            )
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = condition,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
             // Location Info
             Spacer(Modifier.height(12.dp))
             Row(
