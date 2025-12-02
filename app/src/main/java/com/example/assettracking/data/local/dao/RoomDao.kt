@@ -8,6 +8,7 @@ import androidx.room.Transaction
 import androidx.room.Update
 import com.example.assettracking.data.local.entity.RoomEntity
 import com.example.assettracking.data.local.entity.RoomWithAssetsEntity
+import com.example.assettracking.data.local.model.RoomAssetTuple
 import com.example.assettracking.data.local.model.RoomSummaryTuple
 import kotlinx.coroutines.flow.Flow
 
@@ -33,6 +34,14 @@ interface RoomDao {
     @Transaction
     @Query("SELECT * FROM rooms WHERE id = :roomId")
     fun observeRoomWithAssets(roomId: Long): Flow<RoomWithAssetsEntity?>
+
+    @Query(
+        "SELECT a.id AS assetId, a.code AS assetCode, a.name AS assetName, a.details AS assetDetails, " +
+            "a.baseRoomId AS assetBaseRoomId, br.name AS baseRoomName, a.currentRoomId AS assetCurrentRoomId " +
+            "FROM assets a LEFT JOIN rooms br ON br.id = a.baseRoomId " +
+            "WHERE a.currentRoomId = :roomId ORDER BY a.name"
+    )
+    fun observeRoomAssets(roomId: Long): Flow<List<RoomAssetTuple>>
 
     @Query("SELECT * FROM rooms WHERE id = :roomId")
     suspend fun getRoomById(roomId: Long): RoomEntity?

@@ -43,6 +43,10 @@ class RoomDetailViewModel @Inject constructor(
         _uiState.update { it.copy(message = null) }
     }
 
+    fun toggleGrouping() {
+        _uiState.update { it.copy(isGrouped = !it.isGrouped) }
+    }
+
     fun assignAsset(assetCode: String) {
         if (assetCode.isBlank()) {
             _uiState.update { it.copy(message = UiMessage("Invalid barcode")) }

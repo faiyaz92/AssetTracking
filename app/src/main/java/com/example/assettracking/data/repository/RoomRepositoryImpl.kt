@@ -3,12 +3,14 @@ package com.example.assettracking.data.repository
 import com.example.assettracking.data.local.dao.RoomDao
 import com.example.assettracking.data.local.entity.RoomEntity
 import com.example.assettracking.data.local.entity.RoomWithAssetsEntity
+import com.example.assettracking.data.local.model.RoomAssetTuple
 import com.example.assettracking.data.local.model.RoomSummaryTuple
 import com.example.assettracking.domain.model.AssetSummary
 import com.example.assettracking.domain.model.RoomDetail
 import com.example.assettracking.domain.model.RoomSummary
 import com.example.assettracking.domain.repository.RoomRepository
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -22,7 +24,27 @@ class RoomRepositoryImpl @Inject constructor(
         roomDao.observeRoomSummaries().map { rooms -> rooms.map { it.toDomainModel() } }
 
     override fun observeRoomDetail(roomId: Long): Flow<RoomDetail?> =
-        roomDao.observeRoomWithAssets(roomId).map { entity -> entity?.toDomainModel() }
+        roomDao.observeRoomWithAssets(roomId).combine(roomDao.observeRoomAssets(roomId)) { roomEntity, assetTuples ->
+            roomEntity?.let {
+                RoomDetail(
+                    id = it.room.id,
+                    name = it.room.name,
+                    description = it.room.description,
+                    assets = assetTuples.map { tuple ->
+                        AssetSummary(
+                            id = tuple.assetId,
+                            code = tuple.assetCode,
+                            name = tuple.assetName,
+                            details = tuple.assetDetails,
+                            baseRoomId = tuple.assetBaseRoomId,
+                            baseRoomName = tuple.baseRoomName,
+                            currentRoomId = tuple.assetCurrentRoomId,
+                            currentRoomName = it.room.name
+                        )
+                    }
+                )
+            }
+        }
 
     override suspend fun createRoom(name: String, description: String?): Long {
         val entity = RoomEntity(name = name, description = description)
