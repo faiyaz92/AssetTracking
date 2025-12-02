@@ -6,28 +6,38 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Print
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -38,6 +48,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -47,27 +58,26 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.assettracking.domain.model.AssetSummary
-import com.example.assettracking.presentation.tabs.model.AssetListEvent
-import com.example.assettracking.presentation.tabs.viewmodel.AssetListViewModel
-import com.example.assettracking.util.printBarcode
-import com.example.assettracking.util.rememberBarcodeImage
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.core.content.ContextCompat
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
+import com.example.assettracking.domain.model.AssetSummary
 import com.example.assettracking.domain.model.RoomSummary
+import com.example.assettracking.presentation.tabs.model.AssetListEvent
+import com.example.assettracking.presentation.tabs.viewmodel.AssetListViewModel
+import com.example.assettracking.util.printBarcode
+import com.example.assettracking.util.rememberBarcodeImage
 
 @Composable
 fun AssetsScreen(
@@ -120,10 +130,21 @@ fun AssetsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Assets") },
+                title = {
+                    Text(
+                        "Asset Management",
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontWeight = FontWeight.Bold
+                        )
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "Back",
+                            tint = MaterialTheme.colorScheme.onPrimary
+                        )
                     }
                 }
             )
@@ -134,7 +155,10 @@ fun AssetsScreen(
                 onClick = {
                     editingAsset = null
                     showAssetDialog = true
-                }
+                },
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp)
             ) {
                 Icon(imageVector = Icons.Default.Add, contentDescription = "Add asset")
             }
@@ -144,7 +168,9 @@ fun AssetsScreen(
             modifier = Modifier
                 .padding(paddingValues)
                 .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
         ) {
+            // Professional Search Bar
             OutlinedTextField(
                 value = state.searchQuery,
                 onValueChange = { query ->
@@ -152,8 +178,17 @@ fun AssetsScreen(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
-                label = { Text("Search asset") }
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                label = { Text("Search Assets") },
+                leadingIcon = {
+                    Icon(
+                        Icons.Default.Search,
+                        contentDescription = "Search",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp)
             )
             when {
                 state.isLoading -> LoadingState(Modifier.fillMaxSize())
@@ -230,51 +265,133 @@ private fun AssetCard(
     val barcodeBitmap = rememberBarcodeImage(content = asset.code, width = 800, height = 220)
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(text = asset.name, style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(4.dp))
-            Text(text = "Code: ${asset.code}", style = MaterialTheme.typography.bodyMedium)
-            asset.details?.takeIf { it.isNotBlank() }?.let { details ->
-                Spacer(Modifier.height(4.dp))
-                Text(text = details, style = MaterialTheme.typography.bodyMedium)
+        Column(modifier = Modifier.padding(20.dp)) {
+            // Asset Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = asset.name,
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontWeight = FontWeight.Bold
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "Code: ${asset.code}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = buildString {
-                    append("Base: ")
-                    append(asset.baseRoomName ?: "Unassigned")
-                    if (asset.currentRoomName != null && asset.currentRoomName != asset.baseRoomName) {
-                        append(" | Current: ${asset.currentRoomName}")
-                    }
-                },
-                style = MaterialTheme.typography.bodySmall
-            )
-            barcodeBitmap?.let { bitmap ->
-                Spacer(Modifier.height(12.dp))
-                Image(
-                    bitmap = bitmap,
-                    contentDescription = "Barcode for ${asset.code}",
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(120.dp)
+
+            // Asset Details
+            asset.details?.takeIf { it.isNotBlank() }?.let { details ->
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = details,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Divider(modifier = Modifier.padding(vertical = 8.dp))
+
+            // Location Info
+            Spacer(Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Start
+            ) {
+                Icon(
+                    Icons.Default.Home,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = buildString {
+                        append("Base: ")
+                        append(asset.baseRoomName ?: "Unassigned")
+                        if (asset.currentRoomName != null && asset.currentRoomName != asset.baseRoomName) {
+                            append(" | Current: ${asset.currentRoomName}")
+                        }
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            // Barcode Image
+            barcodeBitmap?.let { bitmap ->
+                Spacer(Modifier.height(16.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Image(
+                        bitmap = bitmap,
+                        contentDescription = "Barcode for ${asset.code}",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(100.dp)
+                            .padding(8.dp)
+                    )
+                }
+            }
+
+            // Action Buttons
+            Spacer(Modifier.height(16.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = onPrint) {
-                    Icon(imageVector = Icons.Default.Print, contentDescription = "Print barcode")
+                IconButton(
+                    onClick = onPrint,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.primaryContainer)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Print,
+                        contentDescription = "Print barcode",
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
                 }
-                IconButton(onClick = onEdit) {
-                    Icon(imageVector = Icons.Default.Edit, contentDescription = "Edit asset")
+                Spacer(Modifier.width(8.dp))
+                IconButton(
+                    onClick = onEdit,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.secondaryContainer)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "Edit asset",
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
                 }
-                IconButton(onClick = onDelete) {
-                    Icon(imageVector = Icons.Default.Delete, contentDescription = "Delete asset")
+                Spacer(Modifier.width(8.dp))
+                IconButton(
+                    onClick = onDelete,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.errorContainer)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Delete asset",
+                        tint = MaterialTheme.colorScheme.onErrorContainer
+                    )
                 }
             }
         }
@@ -318,7 +435,6 @@ private fun AssetFormDialog(
     val name = rememberSaveable(initialName) { mutableStateOf(initialName) }
     val details = rememberSaveable(initialDetails) { mutableStateOf(initialDetails) }
     val baseRoomId = remember { mutableStateOf(initialBaseRoomId) }
-    val expanded = remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -342,40 +458,12 @@ private fun AssetFormDialog(
                     onValueChange = { details.value = it },
                     label = { Text("Details (optional)") }
                 )
-                ExposedDropdownMenuBox(
-                    expanded = expanded.value,
-                    onExpandedChange = { expanded.value = it }
-                ) {
-                    OutlinedTextField(
-                        value = rooms.find { it.id == baseRoomId.value }?.name ?: "No base room",
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("Base room (optional)") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded.value) },
-                        modifier = Modifier.menuAnchor()
-                    )
-                    ExposedDropdownMenu(
-                        expanded = expanded.value,
-                        onDismissRequest = { expanded.value = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("No base room") },
-                            onClick = {
-                                baseRoomId.value = null
-                                expanded.value = false
-                            }
-                        )
-                        rooms.forEach { room ->
-                            DropdownMenuItem(
-                                text = { Text(room.name) },
-                                onClick = {
-                                    baseRoomId.value = room.id
-                                    expanded.value = false
-                                }
-                            )
-                        }
-                    }
-                }
+                OutlinedTextField(
+                    value = rooms.find { it.id == baseRoomId.value }?.name ?: "No base room",
+                    onValueChange = {},
+                    label = { Text("Base room (optional)") },
+                    readOnly = true
+                )
             }
         },
         confirmButton = {
