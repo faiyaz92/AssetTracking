@@ -201,7 +201,8 @@ fun HomeScreen(
                             style = MaterialTheme.typography.headlineSmall.copy(
                                 fontWeight = FontWeight.Bold
                             ),
-                            color = Color.White
+                            color = Color.White,
+                            textAlign = TextAlign.Center
                         )
                     },
                     colors = TopAppBarDefaults.smallTopAppBarColors(
