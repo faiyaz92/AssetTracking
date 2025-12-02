@@ -15,7 +15,7 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class HomeUiState(
-    val rooms: List<com.example.assettracking.domain.model.RoomSummary> = emptyList(),
+    val rooms: List<com.example.assettracking.domain.model.LocationSummary> = emptyList(),
     val isLoading: Boolean = true,
     val message: UiMessage? = null
 )

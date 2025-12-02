@@ -1,16 +1,16 @@
 package com.example.assettracking.domain.usecase
 
-import com.example.assettracking.domain.repository.RoomRepository
+import com.example.assettracking.domain.repository.LocationRepository
 import javax.inject.Inject
 
 class UpdateRoomUseCase @Inject constructor(
-    private val roomRepository: RoomRepository
+    private val locationRepository: LocationRepository
 ) {
-    suspend operator fun invoke(roomId: Long, name: String, description: String?): Result<Unit> {
+    suspend operator fun invoke(locationId: Long, name: String, description: String?): Result<Unit> {
         val normalized = name.trim()
-        if (normalized.isBlank()) return Result.failure(IllegalArgumentException("Room name required"))
-        val updated = roomRepository.updateRoom(roomId, normalized, description?.trim())
-        if (!updated) return Result.failure(IllegalArgumentException("Room not found"))
+        if (normalized.isBlank()) return Result.failure(IllegalArgumentException("Location name required"))
+        val updated = locationRepository.updateLocation(locationId, normalized, description?.trim())
+        if (!updated) return Result.failure(IllegalArgumentException("Location not found"))
         return Result.success(Unit)
     }
 }

@@ -1,6 +1,6 @@
 package com.example.assettracking.domain.model
 
-data class RoomDetail(
+data class LocationDetail(
     val id: Long,
     val name: String,
     val description: String?,

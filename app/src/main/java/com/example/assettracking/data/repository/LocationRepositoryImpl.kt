@@ -1,14 +1,14 @@
 package com.example.assettracking.data.repository
 
-import com.example.assettracking.data.local.dao.RoomDao
-import com.example.assettracking.data.local.entity.RoomEntity
+import com.example.assettracking.data.local.dao.LocationDao
+import com.example.assettracking.data.local.entity.LocationEntity
 import com.example.assettracking.data.local.entity.RoomWithAssetsEntity
 import com.example.assettracking.data.local.model.RoomAssetTuple
-import com.example.assettracking.data.local.model.RoomSummaryTuple
+import com.example.assettracking.data.local.model.LocationSummaryTuple
 import com.example.assettracking.domain.model.AssetSummary
-import com.example.assettracking.domain.model.RoomDetail
-import com.example.assettracking.domain.model.RoomSummary
-import com.example.assettracking.domain.repository.RoomRepository
+import com.example.assettracking.domain.model.LocationDetail
+import com.example.assettracking.domain.model.LocationSummary
+import com.example.assettracking.domain.repository.LocationRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
@@ -16,17 +16,17 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class RoomRepositoryImpl @Inject constructor(
-    private val roomDao: RoomDao
-) : RoomRepository {
+class LocationRepositoryImpl @Inject constructor(
+    private val locationDao: LocationDao
+) : LocationRepository {
 
-    override fun observeRoomSummaries(): Flow<List<RoomSummary>> =
-        roomDao.observeRoomSummaries().map { rooms -> rooms.map { it.toDomainModel() } }
+    override fun observeLocationSummaries(): Flow<List<LocationSummary>> =
+        locationDao.observeLocationSummaries().map { locations -> locations.map { it.toDomainModel() } }
 
-    override fun observeRoomDetail(roomId: Long): Flow<RoomDetail?> =
-        roomDao.observeRoomWithAssets(roomId).combine(roomDao.observeRoomAssets(roomId)) { roomEntity, assetTuples ->
-            roomEntity?.let {
-                RoomDetail(
+    override fun observeLocationDetail(locationId: Long): Flow<LocationDetail?> =
+        locationDao.observeLocationWithAssets(locationId).combine(locationDao.observeLocationAssets(locationId)) { locationEntity, assetTuples ->
+            locationEntity?.let {
+                LocationDetail(
                     id = it.room.id,
                     name = it.room.name,
                     description = it.room.description,
@@ -46,32 +46,32 @@ class RoomRepositoryImpl @Inject constructor(
             }
         }
 
-    override suspend fun createRoom(name: String, description: String?): Long {
-        val entity = RoomEntity(name = name, description = description)
-        return roomDao.insert(entity)
+    override suspend fun createLocation(name: String, description: String?): Long {
+        val entity = LocationEntity(name = name, description = description)
+        return locationDao.insert(entity)
     }
 
-    override suspend fun updateRoom(roomId: Long, name: String, description: String?): Boolean {
-        val existing = roomDao.getRoomById(roomId) ?: return false
+    override suspend fun updateLocation(locationId: Long, name: String, description: String?): Boolean {
+        val existing = locationDao.getLocationById(locationId) ?: return false
         val updated = existing.copy(name = name, description = description)
-        roomDao.update(updated)
+        locationDao.update(updated)
         return true
     }
 
-    override suspend fun deleteRoom(roomId: Long): Boolean {
-        val existing = roomDao.getRoomById(roomId) ?: return false
-        roomDao.delete(existing)
+    override suspend fun deleteLocation(locationId: Long): Boolean {
+        val existing = locationDao.getLocationById(locationId) ?: return false
+        locationDao.delete(existing)
         return true
     }
 
-    private fun RoomSummaryTuple.toDomainModel(): RoomSummary = RoomSummary(
+    private fun LocationSummaryTuple.toDomainModel(): LocationSummary = LocationSummary(
         id = roomId,
         name = roomName,
         description = roomDescription,
         assetCount = assetCount
     )
 
-    private fun RoomWithAssetsEntity.toDomainModel(): RoomDetail = RoomDetail(
+    private fun RoomWithAssetsEntity.toDomainModel(): LocationDetail = LocationDetail(
         id = room.id,
         name = room.name,
         description = room.description,

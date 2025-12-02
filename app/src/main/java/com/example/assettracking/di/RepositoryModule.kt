@@ -2,10 +2,10 @@ package com.example.assettracking.di
 
 import com.example.assettracking.data.repository.AssetMovementRepositoryImpl
 import com.example.assettracking.data.repository.AssetRepositoryImpl
-import com.example.assettracking.data.repository.RoomRepositoryImpl
+import com.example.assettracking.data.repository.LocationRepositoryImpl
 import com.example.assettracking.domain.repository.AssetMovementRepository
 import com.example.assettracking.domain.repository.AssetRepository
-import com.example.assettracking.domain.repository.RoomRepository
+import com.example.assettracking.domain.repository.LocationRepository
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -18,9 +18,9 @@ abstract class RepositoryModule {
 
     @Binds
     @Singleton
-    abstract fun bindRoomRepository(
-        impl: RoomRepositoryImpl
-    ): RoomRepository
+    abstract fun bindLocationRepository(
+        impl: LocationRepositoryImpl
+    ): LocationRepository
 
     @Binds
     @Singleton

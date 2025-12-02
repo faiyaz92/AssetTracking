@@ -28,7 +28,10 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -78,7 +81,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import com.example.assettracking.domain.model.AssetSummary
-import com.example.assettracking.domain.model.RoomSummary
+import com.example.assettracking.domain.model.LocationSummary
 import com.example.assettracking.presentation.tabs.model.AssetListEvent
 import com.example.assettracking.presentation.tabs.viewmodel.AssetListViewModel
 import com.example.assettracking.util.printBarcode
@@ -103,6 +106,8 @@ fun AssetsScreen(
 
     var showAssetDialog by rememberSaveable { mutableStateOf(false) }
     var editingAsset by remember { mutableStateOf<AssetSummary?>(null) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    var assetToDelete by remember { mutableStateOf<AssetSummary?>(null) }
 
     // Permission handling for Bluetooth printing
     var pendingPrintAsset by remember { mutableStateOf<AssetSummary?>(null) }
@@ -238,7 +243,8 @@ fun AssetsScreen(
                                 showAssetDialog = true
                             },
                             onDelete = {
-                                viewModel.onEvent(AssetListEvent.DeleteAsset(asset.id))
+                                assetToDelete = asset
+                                showDeleteDialog = true
                             },
                             onPrint = {
                                 val allGranted = bluetoothPermissions.all { permission ->
@@ -266,7 +272,7 @@ fun AssetsScreen(
             initialDetails = asset?.details.orEmpty(),
             initialCondition = asset?.condition.orEmpty(),
             initialBaseRoomId = asset?.baseRoomId,
-            rooms = state.rooms,
+            locations = state.rooms,
             onDismiss = { showAssetDialog = false },
             onConfirm = { name, details, condition, baseRoomId ->
                 if (asset == null) {
@@ -278,6 +284,39 @@ fun AssetsScreen(
             }
         )
     }
+
+    if (showDeleteDialog && assetToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Delete Asset") },
+            text = { 
+                Text("Are you sure you want to delete '${assetToDelete?.name}'? This action cannot be undone.")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        assetToDelete?.let { viewModel.onEvent(AssetListEvent.DeleteAsset(it.id)) }
+                        showDeleteDialog = false
+                        assetToDelete = null
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { 
+                    showDeleteDialog = false
+                    assetToDelete = null
+                }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
 }
 
 @Composable
@@ -484,7 +523,7 @@ private fun AssetFormDialog(
     initialDetails: String,
     initialCondition: String,
     initialBaseRoomId: Long?,
-    rooms: List<RoomSummary>,
+    locations: List<LocationSummary>,
     onDismiss: () -> Unit,
     onConfirm: (String, String?, String?, Long?) -> Unit
 ) {
@@ -517,13 +556,45 @@ private fun AssetFormDialog(
                     label = { Text("Condition (optional)") },
                     shape = RoundedCornerShape(12.dp)
                 )
-                OutlinedTextField(
-                    value = rooms.find { it.id == baseRoomId.value }?.name ?: "No base room",
-                    onValueChange = {},
-                    label = { Text("Base room (optional)") },
-                    readOnly = true,
-                    shape = RoundedCornerShape(12.dp)
-                )
+                var expanded by remember { mutableStateOf(false) }
+                
+                ExposedDropdownMenuBox(
+                    expanded = expanded,
+                    onExpandedChange = { expanded = it }
+                ) {
+                    OutlinedTextField(
+                        value = locations.find { it.id == baseRoomId.value }?.name ?: "No base location",
+                        onValueChange = {},
+                        label = { Text("Base location (optional)") },
+                        readOnly = true,
+                        shape = RoundedCornerShape(12.dp),
+                        trailingIcon = {
+                            ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+                        },
+                        modifier = Modifier.menuAnchor()
+                    )
+                    ExposedDropdownMenu(
+                        expanded = expanded,
+                        onDismissRequest = { expanded = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("No base location") },
+                            onClick = {
+                                baseRoomId.value = null
+                                expanded = false
+                            }
+                        )
+                        locations.forEach { location ->
+                            DropdownMenuItem(
+                                text = { Text(location.name) },
+                                onClick = {
+                                    baseRoomId.value = location.id
+                                    expanded = false
+                                }
+                            )
+                        }
+                    }
+                }
             }
         },
         confirmButton = {

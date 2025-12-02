@@ -1,12 +1,12 @@
 package com.example.assettracking.domain.usecase
 
-import com.example.assettracking.domain.model.RoomDetail
-import com.example.assettracking.domain.repository.RoomRepository
+import com.example.assettracking.domain.model.LocationDetail
+import com.example.assettracking.domain.repository.LocationRepository
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 
 class ObserveRoomDetailUseCase @Inject constructor(
-    private val roomRepository: RoomRepository
+    private val locationRepository: LocationRepository
 ) {
-    operator fun invoke(roomId: Long): Flow<RoomDetail?> = roomRepository.observeRoomDetail(roomId)
+    operator fun invoke(locationId: Long): Flow<LocationDetail?> = locationRepository.observeLocationDetail(locationId)
 }

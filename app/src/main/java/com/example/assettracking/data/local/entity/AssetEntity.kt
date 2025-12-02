@@ -14,14 +14,14 @@ import androidx.room.PrimaryKey
     ],
     foreignKeys = [
         ForeignKey(
-            entity = RoomEntity::class,
+            entity = LocationEntity::class,
             parentColumns = ["id"],
             childColumns = ["baseRoomId"],
             onDelete = ForeignKey.SET_NULL,
             onUpdate = ForeignKey.CASCADE
         ),
         ForeignKey(
-            entity = RoomEntity::class,
+            entity = LocationEntity::class,
             parentColumns = ["id"],
             childColumns = ["currentRoomId"],
             onDelete = ForeignKey.SET_NULL,

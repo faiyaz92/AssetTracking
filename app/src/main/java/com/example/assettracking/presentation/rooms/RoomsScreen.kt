@@ -38,6 +38,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -65,15 +66,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.assettracking.domain.model.RoomSummary
-import com.example.assettracking.presentation.tabs.model.RoomListEvent
-import com.example.assettracking.presentation.tabs.viewmodel.RoomListViewModel
+import com.example.assettracking.domain.model.LocationSummary
+import com.example.assettracking.presentation.tabs.model.LocationListEvent
+import com.example.assettracking.presentation.tabs.viewmodel.LocationListViewModel
 
 @Composable
 fun RoomsScreen(
     onBack: () -> Unit,
     onOpenRoom: (Long) -> Unit,
-    viewModel: RoomListViewModel = hiltViewModel()
+    viewModel: LocationListViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -82,12 +83,14 @@ fun RoomsScreen(
         val message = state.message?.text
         if (message != null) {
             snackbarHostState.showSnackbar(message)
-            viewModel.onEvent(RoomListEvent.ClearMessage)
+            viewModel.onEvent(LocationListEvent.ClearMessage)
         }
     }
 
     var showRoomDialog by rememberSaveable { mutableStateOf(false) }
-    var editingRoom by remember { mutableStateOf<RoomSummary?>(null) }
+    var editingRoom by remember { mutableStateOf<LocationSummary?>(null) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    var roomToDelete by remember { mutableStateOf<LocationSummary?>(null) }
 
     Scaffold(
         topBar = {
@@ -106,7 +109,7 @@ fun RoomsScreen(
                 TopAppBar(
                     title = {
                         Text(
-                            "Room Management",
+                            "Location Management",
                             style = MaterialTheme.typography.titleLarge.copy(
                                 fontWeight = FontWeight.Bold
                             ),
@@ -142,7 +145,7 @@ fun RoomsScreen(
                 contentColor = Color.White,
                 elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp)
             ) {
-                Icon(imageVector = Icons.Default.Add, contentDescription = "Add room")
+                Icon(imageVector = Icons.Default.Add, contentDescription = "Add location")
             }
         }
     ) { paddingValues ->
@@ -186,16 +189,16 @@ fun RoomsScreen(
 
             when {
                 state.isLoading -> LoadingState(Modifier.fillMaxSize())
-                state.rooms.isEmpty() -> EmptyState(
+                state.locations.isEmpty() -> EmptyState(
                     modifier = Modifier.fillMaxSize(),
-                    message = "No rooms yet. Tap + to add your first location."
+                    message = "No locations yet. Tap + to add your first location."
                 )
                 else -> LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(state.rooms, key = { it.id }) { room ->
+                    items(state.locations, key = { it.id }) { room ->
                         RoomCard(
                             room = room,
                             onClick = { onOpenRoom(room.id) },
@@ -204,7 +207,8 @@ fun RoomsScreen(
                                 showRoomDialog = true
                             },
                             onDelete = {
-                                viewModel.onEvent(RoomListEvent.DeleteRoom(room.id))
+                                roomToDelete = room
+                                showDeleteDialog = true
                             }
                         )
                     }
@@ -216,17 +220,49 @@ fun RoomsScreen(
     if (showRoomDialog) {
         val room = editingRoom
         RoomFormDialog(
-            title = if (room == null) "Add Room" else "Edit Room",
+            title = if (room == null) "Add Location" else "Edit Location",
             initialName = room?.name.orEmpty(),
             initialDescription = room?.description.orEmpty(),
             onDismiss = { showRoomDialog = false },
             onConfirm = { name, description ->
                 if (room == null) {
-                    viewModel.onEvent(RoomListEvent.CreateRoom(name, description))
+                    viewModel.onEvent(LocationListEvent.CreateLocation(name, description))
                 } else {
-                    viewModel.onEvent(RoomListEvent.UpdateRoom(room.id, name, description))
+                    viewModel.onEvent(LocationListEvent.UpdateLocation(room.id, name, description))
                 }
                 showRoomDialog = false
+            }
+        )
+    }
+
+    if (showDeleteDialog && roomToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Delete Location") },
+            text = { 
+                Text("Are you sure you want to delete '${roomToDelete?.name}'? This action cannot be undone and will remove all assets from this location.")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        roomToDelete?.let { viewModel.onEvent(LocationListEvent.DeleteLocation(it.id)) }
+                        showDeleteDialog = false
+                        roomToDelete = null
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { 
+                    showDeleteDialog = false
+                    roomToDelete = null
+                }) {
+                    Text("Cancel")
+                }
             }
         )
     }
@@ -234,7 +270,7 @@ fun RoomsScreen(
 
 @Composable
 private fun RoomCard(
-    room: RoomSummary,
+    room: LocationSummary,
     onClick: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit
@@ -263,7 +299,7 @@ private fun RoomCard(
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        text = "Room ID: ${room.id}",
+                        text = "Location ID: ${room.id}",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -326,7 +362,7 @@ private fun RoomCard(
                 }
                 Spacer(Modifier.width(12.dp))
                 Text(
-                    text = "Assets in this room",
+                    text = "Assets in this location",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -356,7 +392,7 @@ private fun RoomCard(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Edit,
-                        contentDescription = "Edit room",
+                        contentDescription = "Edit location",
                         tint = MaterialTheme.colorScheme.onSecondaryContainer
                     )
                 }
@@ -369,7 +405,7 @@ private fun RoomCard(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Delete,
-                        contentDescription = "Delete room",
+                        contentDescription = "Delete location",
                         tint = MaterialTheme.colorScheme.onErrorContainer
                     )
                 }
@@ -389,10 +425,10 @@ private fun RowActions(
         verticalAlignment = Alignment.CenterVertically
     ) {
         IconButton(onClick = onEdit) {
-            Icon(imageVector = Icons.Default.Edit, contentDescription = "Edit room")
+            Icon(imageVector = Icons.Default.Edit, contentDescription = "Edit location")
         }
         IconButton(onClick = onDelete) {
-            Icon(imageVector = Icons.Default.Delete, contentDescription = "Delete room")
+            Icon(imageVector = Icons.Default.Delete, contentDescription = "Delete location")
         }
     }
 }
@@ -442,7 +478,7 @@ private fun RoomFormDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Room name") },
+                    label = { Text("Location name") },
                     singleLine = true,
                     shape = RoundedCornerShape(12.dp)
                 )

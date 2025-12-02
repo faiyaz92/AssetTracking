@@ -5,7 +5,7 @@ import androidx.room.Room
 import com.example.assettracking.data.local.AssetTrackingDatabase
 import com.example.assettracking.data.local.dao.AssetDao
 import com.example.assettracking.data.local.dao.AssetMovementDao
-import com.example.assettracking.data.local.dao.RoomDao
+import com.example.assettracking.data.local.dao.LocationDao
 import com.example.assettracking.data.repository.AssetMovementRepositoryImpl
 import com.example.assettracking.domain.repository.AssetMovementRepository
 import dagger.Module
@@ -28,10 +28,10 @@ object DatabaseModule {
             context,
             AssetTrackingDatabase::class.java,
             "asset-tracking.db"
-        ).build()
+        ).addMigrations(AssetTrackingDatabase.MIGRATION_1_2).build()
 
     @Provides
-    fun provideRoomDao(database: AssetTrackingDatabase): RoomDao = database.roomDao()
+    fun provideLocationDao(database: AssetTrackingDatabase): LocationDao = database.locationDao()
 
     @Provides
     fun provideAssetDao(database: AssetTrackingDatabase): AssetDao = database.assetDao()

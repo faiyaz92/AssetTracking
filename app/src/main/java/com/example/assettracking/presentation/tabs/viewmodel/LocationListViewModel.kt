@@ -3,8 +3,8 @@ package com.example.assettracking.presentation.tabs.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.assettracking.presentation.common.UiMessage
-import com.example.assettracking.presentation.tabs.model.RoomListEvent
-import com.example.assettracking.presentation.tabs.model.RoomListUiState
+import com.example.assettracking.presentation.tabs.model.LocationListEvent
+import com.example.assettracking.presentation.tabs.model.LocationListUiState
 import com.example.assettracking.domain.usecase.CreateRoomUseCase
 import com.example.assettracking.domain.usecase.DeleteRoomUseCase
 import com.example.assettracking.domain.usecase.ObserveRoomsUseCase
@@ -19,35 +19,35 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 @HiltViewModel
-class RoomListViewModel @Inject constructor(
+class LocationListViewModel @Inject constructor(
     private val observeRoomsUseCase: ObserveRoomsUseCase,
     private val createRoomUseCase: CreateRoomUseCase,
     private val updateRoomUseCase: UpdateRoomUseCase,
     private val deleteRoomUseCase: DeleteRoomUseCase
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(RoomListUiState())
+    private val _uiState = MutableStateFlow(LocationListUiState())
     val uiState = _uiState.asStateFlow()
 
     init {
         observeRooms()
     }
 
-    fun onEvent(event: RoomListEvent) {
+    fun onEvent(event: LocationListEvent) {
         when (event) {
-            is RoomListEvent.CreateRoom -> createRoom(event.name, event.description)
-            is RoomListEvent.UpdateRoom -> updateRoom(event.id, event.name, event.description)
-            is RoomListEvent.DeleteRoom -> deleteRoom(event.id)
-            RoomListEvent.ClearMessage -> _uiState.update { it.copy(message = null) }
+            is LocationListEvent.CreateLocation -> createRoom(event.name, event.description)
+            is LocationListEvent.UpdateLocation -> updateRoom(event.id, event.name, event.description)
+            is LocationListEvent.DeleteLocation -> deleteRoom(event.id)
+            LocationListEvent.ClearMessage -> _uiState.update { it.copy(message = null) }
         }
     }
 
     private fun observeRooms() {
         observeRoomsUseCase()
-            .onEach { rooms ->
+            .onEach { locations ->
                 _uiState.update { state ->
                     state.copy(
-                        rooms = rooms,
+                        locations = locations,
                         isLoading = false
                     )
                 }
@@ -59,7 +59,7 @@ class RoomListViewModel @Inject constructor(
         viewModelScope.launch {
             val result = createRoomUseCase(name, description)
             result.onFailure { error ->
-                _uiState.update { it.copy(message = UiMessage(error.message ?: "Unable to create room")) }
+                _uiState.update { it.copy(message = UiMessage(error.message ?: "Unable to create location")) }
             }
         }
     }
@@ -68,7 +68,7 @@ class RoomListViewModel @Inject constructor(
         viewModelScope.launch {
             val result = updateRoomUseCase(id, name, description)
             result.onFailure { error ->
-                _uiState.update { it.copy(message = UiMessage(error.message ?: "Unable to update room")) }
+                _uiState.update { it.copy(message = UiMessage(error.message ?: "Unable to update location")) }
             }
         }
     }
@@ -77,7 +77,7 @@ class RoomListViewModel @Inject constructor(
         viewModelScope.launch {
             val result = deleteRoomUseCase(id)
             result.onFailure { error ->
-                _uiState.update { it.copy(message = UiMessage(error.message ?: "Unable to delete room")) }
+                _uiState.update { it.copy(message = UiMessage(error.message ?: "Unable to delete location")) }
             }
         }
     }

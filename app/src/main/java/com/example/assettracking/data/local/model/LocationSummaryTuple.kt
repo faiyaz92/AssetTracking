@@ -2,7 +2,7 @@ package com.example.assettracking.data.local.model
 
 import androidx.room.ColumnInfo
 
-data class RoomSummaryTuple(
+data class LocationSummaryTuple(
     @ColumnInfo(name = "roomId")
     val roomId: Long,
     @ColumnInfo(name = "roomName")

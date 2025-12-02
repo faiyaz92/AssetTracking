@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
+
 package com.example.assettracking.presentation.roomdetail
 
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -22,7 +24,9 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -36,10 +40,11 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,7 +61,6 @@ import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
 import kotlin.comparisons.compareBy
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RoomDetailScreen(
     viewModel: RoomDetailViewModel = hiltViewModel(),
@@ -72,6 +76,9 @@ fun RoomDetailScreen(
             viewModel.clearMessage()
         }
     }
+
+    val (showDeleteDialog, setShowDeleteDialog) = remember { mutableStateOf(false) }
+    val (assetToDelete, setAssetToDelete) = remember { mutableStateOf<AssetSummary?>(null) }
 
     val scannerLauncher = rememberLauncherForActivityResult(
         contract = ScanContract()
@@ -122,12 +129,7 @@ fun RoomDetailScreen(
                                 tint = Color.White
                             )
                         }
-                    },
-                    colors = TopAppBarDefaults.smallTopAppBarColors(
-                        containerColor = Color.Transparent,
-                        titleContentColor = Color.White,
-                        navigationIconContentColor = Color.White
-                    )
+                    }
                 )
             }
         },
@@ -157,11 +159,46 @@ fun RoomDetailScreen(
                         isGrouped = state.isGrouped,
                         onToggleGrouping = { viewModel.toggleGrouping() },
                         roomId = detail.id,
-                        onDetach = { assetId -> viewModel.detachAsset(assetId) }
+                        onDetach = { asset ->
+                            setAssetToDelete(asset)
+                            setShowDeleteDialog(true)
+                        }
                     )
                 }
             }
         }
+    }
+
+    if (showDeleteDialog && assetToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { setShowDeleteDialog(false) },
+            title = { Text("Detach Asset") },
+            text = { 
+                Text("Are you sure you want to detach '${assetToDelete?.name}' from this location? The asset will be unassigned from its current location.")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        assetToDelete?.let { viewModel.detachAsset(it.id) }
+                        setShowDeleteDialog(false)
+                        setAssetToDelete(null)
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("Detach")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { 
+                    setShowDeleteDialog(false)
+                    setAssetToDelete(null)
+                }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 
@@ -174,7 +211,7 @@ private fun RoomDetailContent(
     isGrouped: Boolean,
     onToggleGrouping: () -> Unit,
     roomId: Long,
-    onDetach: (Long) -> Unit
+    onDetach: (AssetSummary) -> Unit
 ) {
     Column(modifier = modifier) {
         // Professional Header
@@ -248,7 +285,6 @@ private fun RoomDetailContent(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AssetInRoomCard(
     asset: AssetSummary,
@@ -416,7 +452,7 @@ private fun LoadingState(modifier: Modifier) {
 @Composable
 private fun FlatAssetList(
     assets: List<AssetSummary>,
-    onDetach: (Long) -> Unit
+    onDetach: (AssetSummary) -> Unit
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -424,7 +460,7 @@ private fun FlatAssetList(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         items(assets, key = { it.id }) { asset ->
-            AssetInRoomCard(asset = asset, onDetach = { onDetach(asset.id) })
+            AssetInRoomCard(asset = asset, onDetach = { onDetach(asset) })
         }
     }
 }
@@ -433,7 +469,7 @@ private fun FlatAssetList(
 private fun GroupedAssetList(
     assets: List<AssetSummary>,
     roomId: Long,
-    onDetach: (Long) -> Unit
+    onDetach: (AssetSummary) -> Unit
 ) {
     val grouped = assets.groupBy { it.baseRoomId }
     val sortedKeys = grouped.keys.sortedWith(compareBy<Long?> { if (it == roomId) 0 else 1 }.thenBy { it ?: Long.MAX_VALUE })
@@ -459,7 +495,7 @@ private fun GroupedAssetList(
                 )
             }
             items(groupAssets, key = { it.id }) { asset ->
-                AssetInRoomCard(asset = asset, onDetach = { onDetach(asset.id) })
+                AssetInRoomCard(asset = asset, onDetach = { onDetach(asset) })
             }
         }
     }

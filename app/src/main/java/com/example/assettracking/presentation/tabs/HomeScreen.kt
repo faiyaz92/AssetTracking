@@ -55,7 +55,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.assettracking.domain.model.RoomSummary
+import com.example.assettracking.domain.model.LocationSummary
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
 
@@ -73,7 +73,7 @@ fun HomeScreen(
     onOpenAssets: () -> Unit,
     onOpenAuditTrail: () -> Unit,
     onQuickScan: () -> Unit,
-    rooms: List<RoomSummary> = emptyList(),
+    rooms: List<LocationSummary> = emptyList(),
     onAssetMoved: (String, Long, String) -> Unit = { _, _, _ -> }
 ) {
     var showQuickScanDialog by remember { mutableStateOf(false) }
@@ -377,7 +377,7 @@ private fun DashboardCard(item: DashboardItem) {
 
 @Composable
 fun QuickScanDialog(
-    rooms: List<RoomSummary>,
+    rooms: List<LocationSummary>,
     onDismiss: () -> Unit,
     onScanComplete: (String, Long, String) -> Unit
 ) {
@@ -409,7 +409,12 @@ fun QuickScanDialog(
 
     if (showConditionDialog && scannedCode != null) {
         AlertDialog(
-            onDismissRequest = { showConditionDialog = false },
+            onDismissRequest = { 
+                showConditionDialog = false
+                scannedCode = null
+                selectedRoomId = null
+                condition = ""
+            },
             title = { Text("Asset Scanned") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -425,7 +430,7 @@ fun QuickScanDialog(
                     )
 
                     Text(
-                        "Select destination room:",
+                        "Select destination location:",
                         style = MaterialTheme.typography.titleSmall
                     )
 
@@ -458,6 +463,9 @@ fun QuickScanDialog(
                         if (roomId != null) {
                             onScanComplete(scannedCode!!, roomId, condition)
                             showConditionDialog = false
+                            scannedCode = null
+                            selectedRoomId = null
+                            condition = ""
                             onDismiss()
                         }
                     },
@@ -467,7 +475,12 @@ fun QuickScanDialog(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showConditionDialog = false }) {
+                TextButton(onClick = { 
+                    showConditionDialog = false
+                    scannedCode = null
+                    selectedRoomId = null
+                    condition = ""
+                }) {
                     Text("Cancel")
                 }
             }
@@ -484,12 +497,15 @@ fun QuickScanDialog(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Text(
-                    "Scan an asset barcode to quickly move it to a different room",
+                    "Scan an asset barcode to quickly move it to a different location",
                     textAlign = TextAlign.Center
                 )
 
                 Button(
-                    onClick = { scannerLauncher.launch(scanOptions) },
+                    onClick = { 
+                        scannerLauncher.launch(scanOptions)
+                        // Don't dismiss - let condition dialog handle dismissal
+                    },
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(Icons.Default.QrCodeScanner, contentDescription = null)

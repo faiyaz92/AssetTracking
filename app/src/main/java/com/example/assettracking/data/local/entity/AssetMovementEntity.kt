@@ -23,14 +23,14 @@ import androidx.room.PrimaryKey
             onUpdate = ForeignKey.CASCADE
         ),
         ForeignKey(
-            entity = RoomEntity::class,
+            entity = LocationEntity::class,
             parentColumns = ["id"],
             childColumns = ["fromRoomId"],
             onDelete = ForeignKey.SET_NULL,
             onUpdate = ForeignKey.CASCADE
         ),
         ForeignKey(
-            entity = RoomEntity::class,
+            entity = LocationEntity::class,
             parentColumns = ["id"],
             childColumns = ["toRoomId"],
             onDelete = ForeignKey.CASCADE,

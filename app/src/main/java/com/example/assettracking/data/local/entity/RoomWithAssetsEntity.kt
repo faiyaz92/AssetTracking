@@ -5,7 +5,7 @@ import androidx.room.Relation
 
 data class RoomWithAssetsEntity(
     @Embedded
-    val room: RoomEntity,
+    val room: LocationEntity,
     @Relation(
         parentColumn = "id",
         entityColumn = "currentRoomId"

@@ -18,8 +18,8 @@ interface AssetMovementDao {
             "m.toRoomId, tr.name AS toRoomName, m.condition, m.timestamp " +
             "FROM asset_movements m " +
             "JOIN assets a ON a.id = m.assetId " +
-            "LEFT JOIN rooms fr ON fr.id = m.fromRoomId " +
-            "JOIN rooms tr ON tr.id = m.toRoomId " +
+            "LEFT JOIN locations fr ON fr.id = m.fromRoomId " +
+            "JOIN locations tr ON tr.id = m.toRoomId " +
             "ORDER BY m.timestamp DESC"
     )
     fun observeMovements(): Flow<List<AssetMovementWithNamesTuple>>

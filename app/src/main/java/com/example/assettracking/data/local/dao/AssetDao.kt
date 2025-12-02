@@ -25,8 +25,8 @@ interface AssetDao {
             "a.baseRoomId AS assetBaseRoomId, br.name AS baseRoomName, " +
             "a.currentRoomId AS assetCurrentRoomId, cr.name AS currentRoomName " +
             "FROM assets a " +
-            "LEFT JOIN rooms br ON br.id = a.baseRoomId " +
-            "LEFT JOIN rooms cr ON cr.id = a.currentRoomId " +
+            "LEFT JOIN locations br ON br.id = a.baseRoomId " +
+            "LEFT JOIN locations cr ON cr.id = a.currentRoomId " +
             "ORDER BY a.name"
     )
     fun observeAssets(): Flow<List<AssetWithRoomTuple>>
