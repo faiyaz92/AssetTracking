@@ -127,7 +127,7 @@ fun AssetsScreen(
         val allGranted = permissions.values.all { it }
         val assetToPrint = pendingPrintAsset
         if (allGranted && assetToPrint != null) {
-            printBarcode(context, assetToPrint.code, assetToPrint.name)
+            printBarcode(context, assetToPrint.id.toString().padStart(6, '0'), assetToPrint.name)
             pendingPrintAsset = null
         }
     }
@@ -245,7 +245,7 @@ fun AssetsScreen(
                                     ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
                                 }
                                 if (allGranted) {
-                                    printBarcode(context, asset.code, asset.name)
+                                    printBarcode(context, asset.id.toString().padStart(6, '0'), asset.name)
                                 } else {
                                     pendingPrintAsset = asset
                                     permissionLauncher.launch(bluetoothPermissions)
@@ -262,18 +262,17 @@ fun AssetsScreen(
         val asset = editingAsset
         AssetFormDialog(
             title = if (asset == null) "Add Asset" else "Edit Asset",
-            initialCode = asset?.code.orEmpty(),
             initialName = asset?.name.orEmpty(),
             initialDetails = asset?.details.orEmpty(),
             initialCondition = asset?.condition.orEmpty(),
             initialBaseRoomId = asset?.baseRoomId,
             rooms = state.rooms,
             onDismiss = { showAssetDialog = false },
-            onConfirm = { code, name, details, condition, baseRoomId ->
+            onConfirm = { name, details, condition, baseRoomId ->
                 if (asset == null) {
-                    viewModel.onEvent(AssetListEvent.CreateAsset(code, name, details, condition, baseRoomId))
+                    viewModel.onEvent(AssetListEvent.CreateAsset(name, details, condition, baseRoomId))
                 } else {
-                    viewModel.onEvent(AssetListEvent.UpdateAsset(asset.id, code, name, details, condition))
+                    viewModel.onEvent(AssetListEvent.UpdateAsset(asset.id, name, details, condition))
                 }
                 showAssetDialog = false
             }
@@ -288,7 +287,7 @@ private fun AssetCard(
     onDelete: () -> Unit,
     onPrint: () -> Unit
 ) {
-    val barcodeBitmap = rememberBarcodeImage(content = asset.code, width = 800, height = 220)
+    val barcodeBitmap = rememberBarcodeImage(content = asset.id.toString(), width = 800, height = 220)
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -312,7 +311,7 @@ private fun AssetCard(
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        text = "Code: ${asset.code}",
+                        text = "Code: ${asset.id.toString().padStart(6, '0')}",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -397,7 +396,7 @@ private fun AssetCard(
                 ) {
                     Image(
                         bitmap = bitmap,
-                        contentDescription = "Barcode for ${asset.code}",
+                        contentDescription = "Barcode for ${asset.id.toString().padStart(6, '0')}",
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(100.dp)
@@ -481,16 +480,14 @@ private fun EmptyState(modifier: Modifier, message: String) {
 @Composable
 private fun AssetFormDialog(
     title: String,
-    initialCode: String,
     initialName: String,
     initialDetails: String,
     initialCondition: String,
     initialBaseRoomId: Long?,
     rooms: List<RoomSummary>,
     onDismiss: () -> Unit,
-    onConfirm: (String, String, String?, String?, Long?) -> Unit
+    onConfirm: (String, String?, String?, Long?) -> Unit
 ) {
-    val code = rememberSaveable(initialCode) { mutableStateOf(initialCode) }
     val name = rememberSaveable(initialName) { mutableStateOf(initialName) }
     val details = rememberSaveable(initialDetails) { mutableStateOf(initialDetails) }
     val condition = rememberSaveable(initialCondition) { mutableStateOf(initialCondition) }
@@ -501,13 +498,6 @@ private fun AssetFormDialog(
         title = { Text(title) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(
-                    value = code.value,
-                    onValueChange = { code.value = it },
-                    label = { Text("Asset code") },
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp)
-                )
                 OutlinedTextField(
                     value = name.value,
                     onValueChange = { name.value = it },
@@ -540,14 +530,13 @@ private fun AssetFormDialog(
             Button(
                 onClick = {
                     onConfirm(
-                        code.value,
                         name.value,
                         details.value.takeIf { it.isNotBlank() },
                         condition.value.takeIf { it.isNotBlank() },
                         baseRoomId.value
                     )
                 },
-                enabled = code.value.isNotBlank() && name.value.isNotBlank()
+                enabled = name.value.isNotBlank()
             ) {
                 Text("Save")
             }

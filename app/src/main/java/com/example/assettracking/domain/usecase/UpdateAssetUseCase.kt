@@ -8,12 +8,11 @@ class UpdateAssetUseCase @Inject constructor(
 ) {
     suspend operator fun invoke(
         assetId: Long,
-        code: String,
         name: String,
         details: String?,
         condition: String?
     ): Result<Unit> {
-        return if (assetRepository.updateAsset(assetId, code, name, details, condition)) {
+        return if (assetRepository.updateAsset(assetId, name, details, condition)) {
             Result.success(Unit)
         } else {
             Result.failure(IllegalArgumentException("Unable to update asset"))

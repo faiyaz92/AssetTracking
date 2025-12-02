@@ -4,9 +4,9 @@ import com.example.assettracking.domain.model.AssetSummary
 import com.example.assettracking.domain.repository.AssetRepository
 import javax.inject.Inject
 
-class FindAssetByCodeUseCase @Inject constructor(
+class FindAssetByIdUseCase @Inject constructor(
     private val assetRepository: AssetRepository
 ) {
-    suspend operator fun invoke(assetCode: String): AssetSummary? =
-        assetRepository.findAssetByCode(assetCode)
+    suspend operator fun invoke(assetId: Long): AssetSummary? =
+        assetRepository.findAssetById(assetId)
 }

@@ -6,7 +6,7 @@ data class AssetWithRoomTuple(
     @ColumnInfo(name = "assetId")
     val assetId: Long,
     @ColumnInfo(name = "assetCode")
-    val assetCode: String,
+    val assetCode: Long,
     @ColumnInfo(name = "assetName")
     val assetName: String,
     @ColumnInfo(name = "assetDetails")
@@ -27,7 +27,7 @@ data class RoomAssetTuple(
     @ColumnInfo(name = "assetId")
     val assetId: Long,
     @ColumnInfo(name = "assetCode")
-    val assetCode: String,
+    val assetCode: Long,
     @ColumnInfo(name = "assetName")
     val assetName: String,
     @ColumnInfo(name = "assetDetails")

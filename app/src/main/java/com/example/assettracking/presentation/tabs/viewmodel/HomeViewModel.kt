@@ -43,9 +43,14 @@ class HomeViewModel @Inject constructor(
 
     fun assignAssetToRoom(assetCode: String, roomId: Long, condition: String) {
         viewModelScope.launch {
-            val result = assignAssetToRoomWithConditionUseCase(assetCode, roomId, condition)
-            result.onFailure { error ->
-                _uiState.update { it.copy(message = UiMessage(error.message ?: "Unable to move asset")) }
+            val assetId = assetCode.toLongOrNull()
+            if (assetId != null) {
+                val result = assignAssetToRoomWithConditionUseCase(assetId, roomId, condition)
+                result.onFailure { error ->
+                    _uiState.update { it.copy(message = UiMessage(error.message ?: "Unable to move asset")) }
+                }
+            } else {
+                _uiState.update { it.copy(message = UiMessage("Invalid asset ID")) }
             }
         }
     }

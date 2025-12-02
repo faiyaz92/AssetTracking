@@ -33,7 +33,6 @@ class RoomRepositoryImpl @Inject constructor(
                     assets = assetTuples.map { tuple ->
                         AssetSummary(
                             id = tuple.assetId,
-                            code = tuple.assetCode,
                             name = tuple.assetName,
                             details = tuple.assetDetails,
                             condition = tuple.assetCondition,
@@ -79,7 +78,6 @@ class RoomRepositoryImpl @Inject constructor(
         assets = assets.map { asset ->
             AssetSummary(
                 id = asset.id,
-                code = asset.code,
                 name = asset.name,
                 details = asset.details,
                 condition = asset.condition,

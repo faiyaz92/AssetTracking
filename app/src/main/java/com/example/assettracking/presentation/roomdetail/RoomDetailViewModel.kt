@@ -5,7 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.assettracking.domain.usecase.CreateMovementUseCase
 import com.example.assettracking.domain.usecase.DetachAssetFromRoomUseCase
-import com.example.assettracking.domain.usecase.FindAssetByCodeUseCase
+import com.example.assettracking.domain.usecase.FindAssetByIdUseCase
 import com.example.assettracking.domain.usecase.ObserveRoomDetailUseCase
 import com.example.assettracking.domain.usecase.UpdateCurrentRoomUseCase
 import com.example.assettracking.presentation.common.UiMessage
@@ -25,7 +25,7 @@ class RoomDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val observeRoomDetailUseCase: ObserveRoomDetailUseCase,
     private val detachAssetFromRoomUseCase: DetachAssetFromRoomUseCase,
-    private val findAssetByCodeUseCase: FindAssetByCodeUseCase,
+    private val findAssetByIdUseCase: FindAssetByIdUseCase,
     private val updateCurrentRoomUseCase: UpdateCurrentRoomUseCase,
     private val createMovementUseCase: CreateMovementUseCase
 ) : ViewModel() {
@@ -48,13 +48,14 @@ class RoomDetailViewModel @Inject constructor(
     }
 
     fun assignAsset(assetCode: String) {
-        if (assetCode.isBlank()) {
+        val assetId = assetCode.toLongOrNull()
+        if (assetId == null) {
             _uiState.update { it.copy(message = UiMessage("Invalid barcode")) }
             return
         }
         viewModelScope.launch {
             // First, find the asset to get its current room
-            val asset = findAssetByCodeUseCase(assetCode)
+            val asset = findAssetByIdUseCase(assetId)
             if (asset == null) {
                 _uiState.update { it.copy(message = UiMessage("Asset not found")) }
                 return@launch

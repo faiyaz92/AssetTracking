@@ -277,7 +277,7 @@ private fun AssetInRoomCard(
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        text = "Code: ${asset.code}",
+                        text = "Code: ${asset.id.toString().padStart(6, '0')}",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

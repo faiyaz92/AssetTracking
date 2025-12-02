@@ -36,8 +36,8 @@ interface RoomDao {
     fun observeRoomWithAssets(roomId: Long): Flow<RoomWithAssetsEntity?>
 
     @Query(
-        "SELECT a.id AS assetId, a.code AS assetCode, a.name AS assetName, a.details AS assetDetails, " +
-            "a.baseRoomId AS assetBaseRoomId, br.name AS baseRoomName, a.currentRoomId AS assetCurrentRoomId " +
+        "SELECT a.id AS assetId, a.id AS assetCode, a.name AS assetName, a.details AS assetDetails, " +
+            "a.condition AS assetCondition, a.baseRoomId AS assetBaseRoomId, br.name AS baseRoomName, a.currentRoomId AS assetCurrentRoomId " +
             "FROM assets a LEFT JOIN rooms br ON br.id = a.baseRoomId " +
             "WHERE a.currentRoomId = :roomId ORDER BY a.name"
     )

@@ -21,7 +21,7 @@ interface AssetDao {
     suspend fun delete(asset: AssetEntity)
 
     @Query(
-        "SELECT a.id AS assetId, a.code AS assetCode, a.name AS assetName, a.details AS assetDetails, a.condition AS assetCondition, " +
+        "SELECT a.id AS assetId, a.id AS assetCode, a.name AS assetName, a.details AS assetDetails, a.condition AS assetCondition, " +
             "a.baseRoomId AS assetBaseRoomId, br.name AS baseRoomName, " +
             "a.currentRoomId AS assetCurrentRoomId, cr.name AS currentRoomName " +
             "FROM assets a " +
@@ -30,9 +30,6 @@ interface AssetDao {
             "ORDER BY a.name"
     )
     fun observeAssets(): Flow<List<AssetWithRoomTuple>>
-
-    @Query("SELECT * FROM assets WHERE code = :code LIMIT 1")
-    suspend fun getAssetByCode(code: String): AssetEntity?
 
     @Query("SELECT * FROM assets WHERE id = :assetId LIMIT 1")
     suspend fun getAssetById(assetId: Long): AssetEntity?

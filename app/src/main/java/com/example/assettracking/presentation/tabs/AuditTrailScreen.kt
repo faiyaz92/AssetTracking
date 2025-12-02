@@ -196,7 +196,7 @@ private fun MovementCard(movement: AssetMovement) {
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        text = "Code: ${movement.assetId}",
+                        text = "Code: ${movement.assetId.toString().padStart(6, '0')}",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

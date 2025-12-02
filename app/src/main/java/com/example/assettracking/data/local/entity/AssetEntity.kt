@@ -9,7 +9,6 @@ import androidx.room.PrimaryKey
 @Entity(
     tableName = "assets",
     indices = [
-        Index(value = ["code"], unique = true),
         Index(value = ["baseRoomId"]),
         Index(value = ["currentRoomId"])
     ],
@@ -34,8 +33,6 @@ data class AssetEntity(
     @PrimaryKey(autoGenerate = true)
     @ColumnInfo(name = "id")
     val id: Long = 0L,
-    @ColumnInfo(name = "code")
-    val code: String,
     @ColumnInfo(name = "name")
     val name: String,
     @ColumnInfo(name = "details")
