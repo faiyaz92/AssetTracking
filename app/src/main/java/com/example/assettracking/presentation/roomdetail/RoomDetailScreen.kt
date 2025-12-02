@@ -95,7 +95,7 @@ fun RoomDetailScreen(
             setPrompt("Scan asset barcode")
             setCameraId(0)
             setBeepEnabled(true)
-            setOrientationLocked(false)
+            setOrientationLocked(true)
         }
     }
 
