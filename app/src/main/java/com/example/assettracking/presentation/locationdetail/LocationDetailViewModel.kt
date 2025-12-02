@@ -1,4 +1,4 @@
-package com.example.assettracking.presentation.roomdetail
+package com.example.assettracking.presentation.locationdetail
 
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -18,10 +18,10 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-private const val ROOM_ID_KEY = "roomId"
+private const val LOCATION_ID_KEY = "locationId"
 
 @HiltViewModel
-class RoomDetailViewModel @Inject constructor(
+class LocationDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val observeRoomDetailUseCase: ObserveRoomDetailUseCase,
     private val detachAssetFromRoomUseCase: DetachAssetFromRoomUseCase,
@@ -30,13 +30,13 @@ class RoomDetailViewModel @Inject constructor(
     private val createMovementUseCase: CreateMovementUseCase
 ) : ViewModel() {
 
-    private val roomId: Long = checkNotNull(savedStateHandle[ROOM_ID_KEY])
+    private val locationId: Long = checkNotNull(savedStateHandle[LOCATION_ID_KEY])
 
-    private val _uiState = MutableStateFlow(RoomDetailUiState())
+    private val _uiState = MutableStateFlow(LocationDetailUiState())
     val uiState = _uiState.asStateFlow()
 
     init {
-        observeRoomDetails()
+        observeLocationDetails()
     }
 
     fun clearMessage() {
@@ -54,7 +54,7 @@ class RoomDetailViewModel @Inject constructor(
             return
         }
         viewModelScope.launch {
-            // First, find the asset to get its current room
+            // First, find the asset to get its current location
             val asset = findAssetByIdUseCase(assetId)
             if (asset == null) {
                 _uiState.update { it.copy(message = UiMessage("Asset not found")) }
@@ -62,7 +62,7 @@ class RoomDetailViewModel @Inject constructor(
             }
 
             // Update current room
-            val updateResult = updateCurrentRoomUseCase(asset.id, roomId)
+            val updateResult = updateCurrentRoomUseCase(asset.id, locationId)
             if (updateResult.isFailure) {
                 _uiState.update { it.copy(message = UiMessage("Failed to update asset location")) }
                 return@launch
@@ -70,7 +70,7 @@ class RoomDetailViewModel @Inject constructor(
 
             // Log movement for audit trail
             try {
-                createMovementUseCase(asset.id, asset.currentRoomId, roomId)
+                createMovementUseCase(asset.id, asset.currentRoomId, locationId)
             } catch (error: Exception) {
                 _uiState.update {
                     it.copy(message = UiMessage(error.message ?: "Asset location updated but movement not logged"))
@@ -88,12 +88,12 @@ class RoomDetailViewModel @Inject constructor(
         }
     }
 
-    private fun observeRoomDetails() {
-        observeRoomDetailUseCase(roomId)
+    private fun observeLocationDetails() {
+        observeRoomDetailUseCase(locationId)
             .onEach { detail ->
                 _uiState.update { state ->
                     state.copy(
-                        roomDetail = detail,
+                        locationDetail = detail,
                         isLoading = false
                     )
                 }

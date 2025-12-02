@@ -1,6 +1,6 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
 
-package com.example.assettracking.presentation.rooms
+package com.example.assettracking.presentation.locations
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -72,9 +72,9 @@ import com.example.assettracking.presentation.tabs.model.LocationListEvent
 import com.example.assettracking.presentation.tabs.viewmodel.LocationListViewModel
 
 @Composable
-fun RoomsScreen(
+fun LocationsScreen(
     onBack: () -> Unit,
-    onOpenRoom: (Long) -> Unit,
+    onOpenLocation: (Long) -> Unit,
     viewModel: LocationListViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -202,7 +202,7 @@ fun RoomsScreen(
                     items(state.locations, key = { it.id }) { room ->
                         RoomCard(
                             room = room,
-                            onClick = { onOpenRoom(room.id) },
+                            onClick = { onOpenLocation(room.id) },
                             onEdit = {
                                 editingRoom = room
                                 showRoomDialog = true
@@ -484,7 +484,7 @@ private fun RoomFormDialog(
                     shape = RoundedCornerShape(12.dp),
                     colors = TextFieldDefaults.outlinedTextFieldColors(
                         focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                        unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                     )
                 )
                 OutlinedTextField(
@@ -494,7 +494,7 @@ private fun RoomFormDialog(
                     shape = RoundedCornerShape(12.dp),
                     colors = TextFieldDefaults.outlinedTextFieldColors(
                         focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                        unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                     )
                 )
             }

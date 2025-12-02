@@ -1,6 +1,6 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
 
-package com.example.assettracking.presentation.roomdetail
+package com.example.assettracking.presentation.locationdetail
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.background
@@ -23,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Inventory2
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -63,8 +64,8 @@ import com.journeyapps.barcodescanner.ScanOptions
 import kotlin.comparisons.compareBy
 
 @Composable
-fun RoomDetailScreen(
-    viewModel: RoomDetailViewModel = hiltViewModel(),
+fun LocationDetailScreen(
+    viewModel: LocationDetailViewModel = hiltViewModel(),
     onBack: () -> Unit
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -117,7 +118,7 @@ fun RoomDetailScreen(
                 TopAppBar(
                     title = { 
                         Text(
-                            state.roomDetail?.name ?: "Location",
+                            state.locationDetail?.name ?: "Location",
                             style = MaterialTheme.typography.titleLarge.copy(
                                 fontWeight = FontWeight.Bold
                             ),
@@ -153,21 +154,21 @@ fun RoomDetailScreen(
     ) { paddingValues ->
         when {
             state.isLoading -> LoadingState(modifier = Modifier.padding(paddingValues).fillMaxSize())
-            state.roomDetail == null -> EmptyState(
+            state.locationDetail == null -> EmptyState(
                 modifier = Modifier.padding(paddingValues).fillMaxSize(),
-                message = "Room not found"
+                message = "Location not found"
             )
             else -> {
-                val detail = state.roomDetail
+                val detail = state.locationDetail
                 if (detail != null) {
-                    RoomDetailContent(
+                    LocationDetailContent(
                         modifier = Modifier.padding(paddingValues).fillMaxSize(),
-                        roomName = detail.name,
-                        roomDescription = detail.description,
+                        locationName = detail.name,
+                        locationDescription = detail.description,
                         assets = detail.assets,
                         isGrouped = state.isGrouped,
                         onToggleGrouping = { viewModel.toggleGrouping() },
-                        roomId = detail.id,
+                        locationId = detail.id,
                         onDetach = { asset ->
                             setAssetToDelete(asset)
                             setShowDeleteDialog(true)
@@ -212,14 +213,14 @@ fun RoomDetailScreen(
 }
 
 @Composable
-private fun RoomDetailContent(
+private fun LocationDetailContent(
     modifier: Modifier,
-    roomName: String,
-    roomDescription: String?,
+    locationName: String,
+    locationDescription: String?,
     assets: List<AssetSummary>,
     isGrouped: Boolean,
     onToggleGrouping: () -> Unit,
-    roomId: Long,
+    locationId: Long,
     onDetach: (AssetSummary) -> Unit
 ) {
     Column(modifier = modifier) {
@@ -239,14 +240,14 @@ private fun RoomDetailContent(
         ) {
             Column {
                 Text(
-                    roomName,
+                    locationName,
                     style = MaterialTheme.typography.headlineMedium.copy(
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                roomDescription?.takeIf { it.isNotBlank() }?.let { description ->
+                locationDescription?.takeIf { it.isNotBlank() }?.let { description ->
                     Text(
                         description,
                         style = MaterialTheme.typography.bodyLarge.copy(
@@ -275,7 +276,7 @@ private fun RoomDetailContent(
                     style = MaterialTheme.typography.titleMedium
                 )
                 Button(onClick = onToggleGrouping) {
-                    Text(if (isGrouped) "Ungroup" else "Group by Base Room")
+                    Text(if (isGrouped) "Ungroup" else "Group by Base Location")
                 }
             }
         }
@@ -286,7 +287,7 @@ private fun RoomDetailContent(
             )
         } else {
             if (isGrouped) {
-                GroupedAssetList(assets = assets, roomId = roomId, onDetach = onDetach)
+                GroupedAssetList(assets = assets, locationId = locationId, onDetach = onDetach)
             } else {
                 FlatAssetList(assets = assets, onDetach = onDetach)
             }
@@ -295,7 +296,7 @@ private fun RoomDetailContent(
 }
 
 @Composable
-private fun AssetInRoomCard(
+private fun AssetInLocationCard(
     asset: AssetSummary,
     onDetach: () -> Unit
 ) {
@@ -407,12 +408,11 @@ private fun AssetInRoomCard(
                         .background(Color(0xFF1E40AF).copy(alpha = 0.1f)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = "L",
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF1E40AF)
-                        )
+                    Icon(
+                        imageVector = Icons.Default.Place,
+                        contentDescription = "Location",
+                        tint = Color(0xFF1E40AF),
+                        modifier = Modifier.size(20.dp)
                     )
                 }
                 Spacer(Modifier.width(12.dp))
@@ -469,7 +469,7 @@ private fun FlatAssetList(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         items(assets, key = { it.id }) { asset ->
-            AssetInRoomCard(asset = asset, onDetach = { onDetach(asset) })
+            AssetInLocationCard(asset = asset, onDetach = { onDetach(asset) })
         }
     }
 }
@@ -477,11 +477,11 @@ private fun FlatAssetList(
 @Composable
 private fun GroupedAssetList(
     assets: List<AssetSummary>,
-    roomId: Long,
+    locationId: Long,
     onDetach: (AssetSummary) -> Unit
 ) {
     val grouped = assets.groupBy { it.baseRoomId }
-    val sortedKeys = grouped.keys.sortedWith(compareBy<Long?> { if (it == roomId) 0 else 1 }.thenBy { it ?: Long.MAX_VALUE })
+    val sortedKeys = grouped.keys.sortedWith(compareBy<Long?> { if (it == locationId) 0 else 1 }.thenBy { it ?: Long.MAX_VALUE })
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -490,8 +490,8 @@ private fun GroupedAssetList(
     ) {
         for (baseRoomId in sortedKeys) {
             val groupAssets = grouped[baseRoomId] ?: emptyList()
-            val headerText = if (baseRoomId == roomId) {
-                "This Room's Assets"
+            val headerText = if (baseRoomId == locationId) {
+                "This Location's Assets"
             } else {
                 val roomName = groupAssets.firstOrNull()?.baseRoomName ?: "Unassigned"
                 "$roomName Assets"
@@ -504,7 +504,7 @@ private fun GroupedAssetList(
                 )
             }
             items(groupAssets, key = { it.id }) { asset ->
-                AssetInRoomCard(asset = asset, onDetach = { onDetach(asset) })
+                AssetInLocationCard(asset = asset, onDetach = { onDetach(asset) })
             }
         }
     }

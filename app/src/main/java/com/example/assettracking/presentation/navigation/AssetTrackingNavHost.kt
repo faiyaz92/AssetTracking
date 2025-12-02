@@ -10,26 +10,26 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.example.assettracking.presentation.assets.AssetsScreen
-import com.example.assettracking.presentation.roomdetail.RoomDetailScreen
-import com.example.assettracking.presentation.roomdetail.RoomDetailViewModel
-import com.example.assettracking.presentation.rooms.RoomsScreen
+import com.example.assettracking.presentation.locationdetail.LocationDetailScreen
+import com.example.assettracking.presentation.locationdetail.LocationDetailViewModel
+import com.example.assettracking.presentation.locations.LocationsScreen
 import com.example.assettracking.presentation.tabs.AuditTrailScreen
 import com.example.assettracking.presentation.tabs.HomeScreen
 import com.example.assettracking.presentation.tabs.viewmodel.HomeViewModel
 
 object Destinations {
     const val Home = "home"
-    const val Rooms = "rooms"
+    const val Locations = "locations"
     const val Assets = "assets"
-    const val RoomDetail = "room_detail"
+    const val LocationDetail = "location_detail"
     const val AuditTrail = "audit_trail"
 }
 
 object Routes {
     const val Home = Destinations.Home
-    const val Rooms = Destinations.Rooms
+    const val Locations = Destinations.Locations
     const val Assets = Destinations.Assets
-    const val RoomDetail = "${Destinations.RoomDetail}/{roomId}"
+    const val LocationDetail = "${Destinations.LocationDetail}/{locationId}"
     const val AuditTrail = Destinations.AuditTrail
 }
 
@@ -43,7 +43,7 @@ fun AssetTrackingNavHost(navController: NavHostController) {
             val viewModel: HomeViewModel = hiltViewModel()
             val uiState by viewModel.uiState.collectAsStateWithLifecycle()
             HomeScreen(
-                onOpenRooms = { navController.navigate(Routes.Rooms) },
+                onOpenLocations = { navController.navigate(Routes.Locations) },
                 onOpenAssets = { navController.navigate(Routes.Assets) },
                 onOpenAuditTrail = { navController.navigate(Routes.AuditTrail) },
                 onQuickScan = { /* Not used */ },
@@ -53,11 +53,11 @@ fun AssetTrackingNavHost(navController: NavHostController) {
                 }
             )
         }
-        composable(Routes.Rooms) {
-            RoomsScreen(
+        composable(Routes.Locations) {
+            LocationsScreen(
                 onBack = { navController.popBackStack() },
-                onOpenRoom = { roomId ->
-                    navController.navigate("${Destinations.RoomDetail}/$roomId")
+                onOpenLocation = { locationId ->
+                    navController.navigate("${Destinations.LocationDetail}/$locationId")
                 }
             )
         }
@@ -72,11 +72,11 @@ fun AssetTrackingNavHost(navController: NavHostController) {
             )
         }
         composable(
-            route = Routes.RoomDetail,
-            arguments = listOf(navArgument("roomId") { type = NavType.LongType })
+            route = Routes.LocationDetail,
+            arguments = listOf(navArgument("locationId") { type = NavType.LongType })
         ) {
-            val viewModel: RoomDetailViewModel = hiltViewModel()
-            RoomDetailScreen(
+            val viewModel: LocationDetailViewModel = hiltViewModel()
+            LocationDetailScreen(
                 viewModel = viewModel,
                 onBack = { navController.popBackStack() }
             )

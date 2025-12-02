@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Inventory2
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Card
@@ -71,7 +72,7 @@ data class DashboardItem(
 
 @Composable
 fun HomeScreen(
-    onOpenRooms: () -> Unit,
+    onOpenLocations: () -> Unit,
     onOpenAssets: () -> Unit,
     onOpenAuditTrail: () -> Unit,
     onQuickScan: () -> Unit,
@@ -89,11 +90,11 @@ fun HomeScreen(
     }
     val dashboardItems = listOf(
         DashboardItem(
-            title = "Rooms",
+            title = "Locations",
             subtitle = "Manage Locations",
             icon = {
                 Icon(
-                    Icons.Default.Home,
+                    Icons.Default.Place,
                     contentDescription = null,
                     modifier = Modifier.size(32.dp),
                     tint = Color.White
@@ -105,7 +106,7 @@ fun HomeScreen(
                     Color(0xFF3B82F6)
                 )
             ),
-            onClick = onOpenRooms
+            onClick = onOpenLocations
         ),
         DashboardItem(
             title = "Assets",
