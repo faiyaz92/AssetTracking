@@ -28,8 +28,7 @@ object DatabaseModule {
             context,
             AssetTrackingDatabase::class.java,
             "asset-tracking.db"
-        ).addMigrations(AssetTrackingDatabase.MIGRATION_1_2)
-        .build()
+        ).build()
 
     @Provides
     fun provideRoomDao(database: AssetTrackingDatabase): RoomDao = database.roomDao()
@@ -39,9 +38,4 @@ object DatabaseModule {
 
     @Provides
     fun provideAssetMovementDao(database: AssetTrackingDatabase): AssetMovementDao = database.assetMovementDao()
-
-    @Provides
-    fun provideAssetMovementRepository(
-        assetMovementDao: AssetMovementDao
-    ): AssetMovementRepository = AssetMovementRepositoryImpl(assetMovementDao)
 }
