@@ -59,6 +59,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -136,7 +137,8 @@ fun AssetsScreen(
                         "Asset Management",
                         style = MaterialTheme.typography.titleLarge.copy(
                             fontWeight = FontWeight.Bold
-                        )
+                        ),
+                        color = Color.White
                     )
                 },
                 navigationIcon = {
@@ -147,7 +149,15 @@ fun AssetsScreen(
                             tint = Color.White
                         )
                     }
-                }
+                },
+                modifier = Modifier.background(
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(
+                            MaterialTheme.colorScheme.primary,
+                            MaterialTheme.colorScheme.secondary
+                        )
+                    )
+                )
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -446,24 +456,28 @@ private fun AssetFormDialog(
                     value = code.value,
                     onValueChange = { code.value = it },
                     label = { Text("Asset code") },
-                    singleLine = true
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp)
                 )
                 OutlinedTextField(
                     value = name.value,
                     onValueChange = { name.value = it },
                     label = { Text("Asset name") },
-                    singleLine = true
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp)
                 )
                 OutlinedTextField(
                     value = details.value,
                     onValueChange = { details.value = it },
-                    label = { Text("Details (optional)") }
+                    label = { Text("Details (optional)") },
+                    shape = RoundedCornerShape(12.dp)
                 )
                 OutlinedTextField(
                     value = rooms.find { it.id == baseRoomId.value }?.name ?: "No base room",
                     onValueChange = {},
                     label = { Text("Base room (optional)") },
-                    readOnly = true
+                    readOnly = true,
+                    shape = RoundedCornerShape(12.dp)
                 )
             }
         },

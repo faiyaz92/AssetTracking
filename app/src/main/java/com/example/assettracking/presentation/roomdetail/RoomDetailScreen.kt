@@ -1,7 +1,9 @@
 package com.example.assettracking.presentation.roomdetail
 
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -30,12 +32,16 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -81,12 +87,20 @@ fun RoomDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(state.roomDetail?.name ?: "Room") },
+                title = { Text(state.roomDetail?.name ?: "Room", color = Color.White) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back")
                     }
-                }
+                },
+                modifier = Modifier.background(
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(
+                            MaterialTheme.colorScheme.primary,
+                            MaterialTheme.colorScheme.secondary
+                        )
+                    )
+                )
             )
         },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
@@ -135,13 +149,48 @@ private fun RoomDetailContent(
     onDetach: (Long) -> Unit
 ) {
     Column(modifier = modifier) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(text = roomName, style = MaterialTheme.typography.headlineSmall)
-            roomDescription?.takeIf { it.isNotBlank() }?.let { description ->
-                Spacer(Modifier.height(4.dp))
-                Text(text = description, style = MaterialTheme.typography.bodyMedium)
+        // Professional Header
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(
+                            MaterialTheme.colorScheme.primary,
+                            MaterialTheme.colorScheme.secondary
+                        )
+                    )
+                )
+                .padding(24.dp)
+        ) {
+            Column {
+                Text(
+                    roomName,
+                    style = MaterialTheme.typography.headlineMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                roomDescription?.takeIf { it.isNotBlank() }?.let { description ->
+                    Text(
+                        description,
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            color = Color.White.copy(alpha = 0.9f)
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+                Text(
+                    "Manage assets in this location",
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        color = Color.White.copy(alpha = 0.8f)
+                    )
+                )
             }
-            Spacer(Modifier.height(12.dp))
+        }
+
+        Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,

@@ -94,7 +94,8 @@ fun RoomsScreen(
                         "Room Management",
                         style = MaterialTheme.typography.titleLarge.copy(
                             fontWeight = FontWeight.Bold
-                        )
+                        ),
+                        color = Color.White
                     )
                 },
                 navigationIcon = {
@@ -102,10 +103,18 @@ fun RoomsScreen(
                         Icon(
                             imageVector = Icons.Default.ArrowBack,
                             contentDescription = "Back",
-                            tint = androidx.compose.ui.graphics.Color.White
+                            tint = Color.White
                         )
                     }
-                }
+                },
+                modifier = Modifier.background(
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(
+                            MaterialTheme.colorScheme.primary,
+                            MaterialTheme.colorScheme.secondary
+                        )
+                    )
+                )
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -420,12 +429,14 @@ private fun RoomFormDialog(
                     value = name,
                     onValueChange = { name = it },
                     label = { Text("Room name") },
-                    singleLine = true
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp)
                 )
                 OutlinedTextField(
                     value = description,
                     onValueChange = { description = it },
-                    label = { Text("Description (optional)") }
+                    label = { Text("Description (optional)") },
+                    shape = RoundedCornerShape(12.dp)
                 )
             }
         },
