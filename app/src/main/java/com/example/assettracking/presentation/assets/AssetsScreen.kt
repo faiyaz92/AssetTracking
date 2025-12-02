@@ -57,6 +57,13 @@ import com.example.assettracking.presentation.tabs.model.AssetListEvent
 import com.example.assettracking.presentation.tabs.viewmodel.AssetListViewModel
 import com.example.assettracking.util.printBarcode
 import com.example.assettracking.util.rememberBarcodeImage
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.core.content.ContextCompat
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
@@ -81,6 +88,34 @@ fun AssetsScreen(
 
     var showAssetDialog by rememberSaveable { mutableStateOf(false) }
     var editingAsset by remember { mutableStateOf<AssetSummary?>(null) }
+
+    // Permission handling for Bluetooth printing
+    var pendingPrintAsset by remember { mutableStateOf<AssetSummary?>(null) }
+
+    val bluetoothPermissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        arrayOf(
+            Manifest.permission.BLUETOOTH,
+            Manifest.permission.BLUETOOTH_ADMIN,
+            Manifest.permission.BLUETOOTH_SCAN,
+            Manifest.permission.BLUETOOTH_CONNECT
+        )
+    } else {
+        arrayOf(
+            Manifest.permission.BLUETOOTH,
+            Manifest.permission.BLUETOOTH_ADMIN
+        )
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val allGranted = permissions.values.all { it }
+        val assetToPrint = pendingPrintAsset
+        if (allGranted && assetToPrint != null) {
+            printBarcode(context, assetToPrint.code, assetToPrint.name)
+            pendingPrintAsset = null
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -146,7 +181,15 @@ fun AssetsScreen(
                                 viewModel.onEvent(AssetListEvent.DeleteAsset(asset.id))
                             },
                             onPrint = {
-                                printBarcode(context, asset.code, asset.name)
+                                val allGranted = bluetoothPermissions.all { permission ->
+                                    ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+                                }
+                                if (allGranted) {
+                                    printBarcode(context, asset.code, asset.name)
+                                } else {
+                                    pendingPrintAsset = asset
+                                    permissionLauncher.launch(bluetoothPermissions)
+                                }
                             }
                         )
                     }
