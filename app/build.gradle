@@ -82,8 +82,8 @@ dependencies {
 
     implementation 'com.github.DantSu:ESCPOS-ThermalPrinter-Android:3.2.0'
 
-    // Chainway C72 UHF RFID SDK - Add chainway-rfid-sdk.aar to libs folder to enable
-    // implementation files('libs/chainway-rfid-sdk.aar')
+    // Chainway C72 UHF RFID SDK
+    implementation files('libs/DeviceAPI_ver20250209_release.aar')
 
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation composeBom
