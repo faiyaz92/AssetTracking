@@ -2,7 +2,7 @@
 
 ## Document Overview
 
-This guide shows how the BRD V2 and Technical Documentation V2 are interconnected and reference each other for the RFID enhancement to the Asset Tracking Application.
+This guide shows how the BRD V2, Technical Documentation V2, Integration Guide, and Task Checklist V2 are interconnected for the RFID enhancement to the Asset Tracking Application.
 
 ## Document Structure
 
@@ -18,6 +18,20 @@ This guide shows how the BRD V2 and Technical Documentation V2 are interconnecte
 - NFC technical requirements
 - Integration architecture
 - Testing and migration strategies
+
+### Chainway_C72_Integration_Guide.md
+**Device-specific integration guide containing:**
+- Chainway C72 hardware specifications
+- SDK methods and guidelines
+- Implementation approaches
+- Performance optimizations
+
+### C72_Integration_Task_Checklist_V2.md
+**Implementation checklist containing:**
+- Detailed tasks for C72 RFID integration
+- Cross-references to BRD and TechDoc sections
+- AI implementation notes
+- Success criteria and testing requirements
 
 ## Cross-Reference Matrix
 
@@ -38,6 +52,16 @@ This guide shows how the BRD V2 and Technical Documentation V2 are interconnecte
 | RFID-002 | RFID Reader Utility | FR-009 | Functional requirements |
 | SCAN-001 | Scan Mode Selector | FR-003, FR-008 | User stories |
 | RFID-003 | Tag Programming | FR-009 | Technical requirements |
+
+### Checklist V2 → BRD/TechDoc References
+
+| Checklist Task | Description | BRD/TechDoc Reference | Implementation Notes |
+|----------------|-------------|----------------------|---------------------|
+| Task 1 | Chainway C72 SDK Integration | FR-009, RFID-001, RFID-002 | SDK setup and initialization |
+| Task 2 | RFID Write in AssetsScreen | FR-009, US-009, RFID-002 | Tag programming with validation |
+| Task 3 | RFID Scan in LocationDetailScreen | FR-003, FR-009, RFID-001 | Asset assignment via RFID |
+| Task 4 | RFID Quick Scan in HomeScreen | FR-008, FR-009, SCAN-001 | Quick movement with RFID |
+| Task 5 | Documentation Updates | All FR-009 items | Cross-reference maintenance |
 
 ## Key Integration Points
 

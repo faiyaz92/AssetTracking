@@ -1,5 +1,11 @@
 # Asset Tracking Application - Technical Documentation V2 (RFID Integration)
 
+## Document Cross-References
+- **BRD V2**: `BRD_and_TechDoc_V2.md` - Business requirements for RFID integration
+- **Integration Guide**: `Chainway_C72_Integration_Guide.md` - Device specifications and SDK methods
+- **Task Checklist V2**: `C72_Integration_Task_Checklist_V2.md` - Implementation tasks with AI notes
+- **Cross-Reference Guide**: `BRD_TechDoc_V2_Cross_Reference.md` - Document relationships and traceability
+
 ## Overview
 This document provides detailed technical specifications for implementing RFID scanning capabilities alongside existing barcode scanning in the Asset Tracking Application. All RFID functionality maintains compatibility with existing asset tracking workflows.
 
@@ -50,20 +56,71 @@ fun RfidScanner(
 - Checks NFC hardware availability
 - Handles NFC adapter states (enabled/disabled)
 
+### RFID-002: C72 RFID Reader Utility (NEW)
+**Location**: `app/src/main/java/com/example/assettracking/util/C72RfidReader.kt`
+
+**Purpose**: Chainway C72 UHF RFID reader integration for industrial asset tracking
+
+**Implementation Details**:
+- Uses Chainway UHF SDK for 860-960MHz RFID communication
+- Supports EPC Gen2 tags with 1-8 meter read range
+- Implements read, write, and kill operations
+- Maintains same interface as NFC reader for consistent integration
+
+**Code Structure**:
+```kotlin
+class C72RfidReader @Inject constructor(
+    private val context: Context
+) : RfidReader {
+    
+    private var uhfReader: UHFReader? = null
+    
+    override fun initialize(): Boolean {
+        uhfReader = UHFReader.getInstance()
+        return uhfReader?.open(context) == 0
+    }
+    
+    override fun readTag(): String? {
+        // Read single tag and extract asset ID
+        return uhfReader?.readTag()?.epc
+    }
+    
+    override fun writeTag(assetId: String): Boolean {
+        // Write asset ID to tag EPC
+        // Handle existing data validation
+        return uhfReader?.writeTag("", assetId) == 0
+    }
+    
+    override fun close() {
+        uhfReader?.close()
+    }
+}
+```
+
+**Technical Requirements**:
+- Chainway UHF SDK dependency
+- UHF RFID permissions in manifest
+- Hardware detection for C72 device
+- Power management for battery optimization
+- **Cross-Reference**: Task 1 in `C72_Integration_Task_Checklist_V2.md`
+
 ### SCAN-001: Scan Mode Selector
 **Location**: `app/src/main/java/com/example/assettracking/presentation/scanning/ScanModeSelector.kt`
 
-**Purpose**: Unified interface for choosing between barcode and RFID scanning
+**Purpose**: Unified interface for choosing between barcode, NFC, and UHF RFID scanning
 
 **UI Components**:
-- Dialog with two options: "Scan Barcode" and "Scan RFID"
-- Icons for visual distinction
+- Dialog with three options: "Scan Barcode", "Scan NFC", "Scan UHF RFID (C72)"
+- Icons for visual distinction (camera, radio waves, satellite)
+- Hardware availability detection
 - Cancel option
 
 **Integration**:
-- Used in RoomDetailScreen FAB action
-- Used in QuickScanDialog
+- Used in RoomDetailScreen FAB action (Task 3)
+- Used in QuickScanDialog (Task 4)
+- Used in AssetsScreen RFID write validation
 - Maintains consistent user experience
+- **Cross-Reference**: Tasks 2, 3, 4 in `C72_Integration_Task_Checklist_V2.md`
 
 ## Implementation Architecture
 
@@ -92,18 +149,41 @@ fun RfidScanner(
 User selects RFID mode → ScanModeSelector → RfidScanner activates NFC → Tag detected → RfidReader parses ID → Validate against assets → Assignment workflow → Audit trail
 ```
 
-### RFID Tag Format (TechDoc_V2 Ref: RFID-003)
+### RFID-003: Tag Programming and Writing (UPDATED)
+**Location**: Integrated into `C72RfidReader.kt` and AssetsScreen
 
-#### Tag Programming Requirements
-- **Format**: NFC Forum Type 2 or Type 4 tags
-- **Data**: Asset ID as UTF-8 string (same as barcode)
-- **Example**: Tag contains "000001" for asset ID 1
+**Purpose**: RFID tag programming with validation and user confirmation
 
-#### Programming Process
-1. Use external RFID programmer/NFC writer
-2. Write asset ID to tag's NDEF record
-3. Test reading with Android NFC API
-4. Attach programmed tag to asset alongside barcode
+**Implementation Details**:
+- Supports both NFC and UHF RFID tag writing
+- Validates existing tag data before writing
+- Shows appropriate dialogs for data conflicts
+- Uses kill method for tag rewriting when necessary
+
+**Code Structure**:
+```kotlin
+// In AssetsScreen.kt - RFID Write Button
+fun onRfidWrite(asset: AssetSummary) {
+    // Check if C72 hardware available
+    // Read existing tag data
+    // Show confirmation dialogs
+    // Write asset ID using C72RfidReader
+}
+```
+
+**Tag Programming Requirements**:
+- **NFC Format**: NFC Forum Type 2 or Type 4 tags, Asset ID as UTF-8 string
+- **UHF Format**: EPC Gen2 tags, Asset ID in EPC field (up to 96 bits)
+- **Data Content**: Pure asset ID (e.g., "000001") without additional metadata
+- **Cross-Reference**: Task 2 in `C72_Integration_Task_Checklist_V2.md`
+
+**Programming Process**:
+1. Detect available RFID hardware (NFC/UHF)
+2. Read existing tag data to check for conflicts
+3. Show user confirmation for overwriting existing data
+4. Use appropriate write method (NFC NDEF or UHF EPC)
+5. Verify successful writing with read-back
+6. Provide user feedback on success/failure
 
 ### Error Handling
 
@@ -179,8 +259,20 @@ User selects RFID mode → ScanModeSelector → RfidScanner activates NFC → Ta
 
 ### BRD V2 References
 - **FR-009**: RFID Asset Tracking - Core requirement
-- **US-009**: Scan RFID tags - User story
+- **US-009/US-010**: Scan and Write RFID tags - User stories
 - **Non-Functional**: RFID Compatibility requirements
+
+### Task Checklist V2 References
+- **Task 1**: Chainway C72 SDK Integration - SDK setup
+- **Task 2**: RFID Write in AssetsScreen - Tag programming
+- **Task 3**: RFID Scan in LocationDetailScreen - Asset assignment
+- **Task 4**: RFID Quick Scan in HomeScreen - Quick movement
+- **Task 5**: Documentation Updates - Cross-reference maintenance
+
+### Integration Guide References
+- **SDK Methods**: `Chainway_C72_Integration_Guide.md` - Complete SDK reference
+- **Hardware Specs**: Device capabilities and limitations
+- **Implementation Approaches**: Integration strategies
 
 ### Implementation Status
 - ✅ NFC permission and manifest setup

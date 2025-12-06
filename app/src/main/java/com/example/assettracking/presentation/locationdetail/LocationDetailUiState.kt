@@ -7,5 +7,7 @@ data class LocationDetailUiState(
     val locationDetail: LocationDetail? = null,
     val isLoading: Boolean = true,
     val message: UiMessage? = null,
-    val isGrouped: Boolean = false
+    val isGrouped: Boolean = false,
+    val scannedRfidTags: List<String> = emptyList(),
+    val isRfidScanning: Boolean = false
 )

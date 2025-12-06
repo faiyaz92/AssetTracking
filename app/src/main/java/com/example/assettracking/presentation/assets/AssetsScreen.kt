@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Print
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AlertDialog
@@ -75,6 +76,7 @@ import androidx.compose.ui.unit.dp
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -85,16 +87,19 @@ import com.example.assettracking.domain.model.AssetSummary
 import com.example.assettracking.domain.model.LocationSummary
 import com.example.assettracking.presentation.tabs.model.AssetListEvent
 import com.example.assettracking.presentation.tabs.viewmodel.AssetListViewModel
+import com.example.assettracking.util.C72RfidReader
 import com.example.assettracking.util.printBarcode
 import com.example.assettracking.util.rememberBarcodeImage
 
 @Composable
 fun AssetsScreen(
     onBack: () -> Unit,
-    viewModel: AssetListViewModel = hiltViewModel()
+    viewModel: AssetListViewModel = hiltViewModel(),
+    c72RfidReader: C72RfidReader = C72RfidReader(LocalContext.current)
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
 
     LaunchedEffect(state.message) {
@@ -109,6 +114,12 @@ fun AssetsScreen(
     var editingAsset by remember { mutableStateOf<AssetSummary?>(null) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var assetToDelete by remember { mutableStateOf<AssetSummary?>(null) }
+
+    // RFID write related state
+    var showRfidDialog by remember { mutableStateOf(false) }
+    var showRfidConfirmDialog by remember { mutableStateOf(false) }
+    var rfidAssetToWrite by remember { mutableStateOf<AssetSummary?>(null) }
+    var existingRfidData by remember { mutableStateOf<String?>(null) }
 
     // Permission handling for Bluetooth printing
     var pendingPrintAsset by remember { mutableStateOf<AssetSummary?>(null) }
@@ -257,6 +268,10 @@ fun AssetsScreen(
                                     pendingPrintAsset = asset
                                     permissionLauncher.launch(bluetoothPermissions)
                                 }
+                            },
+                            onRfidWrite = {
+                                rfidAssetToWrite = asset
+                                showRfidDialog = true
                             }
                         )
                     }
@@ -318,6 +333,128 @@ fun AssetsScreen(
         )
     }
 
+    if (showRfidDialog && rfidAssetToWrite != null) {
+        AlertDialog(
+            onDismissRequest = { 
+                showRfidDialog = false
+                rfidAssetToWrite = null
+                existingRfidData = null
+            },
+            title = { Text("Write RFID Tag") },
+            text = {
+                Column {
+                    Text("Writing RFID tag for asset: ${rfidAssetToWrite?.name}")
+                    Text("Asset ID: ${rfidAssetToWrite?.id?.toString()?.padStart(6, '0')}")
+                    Text("")
+                    Text("Please place an RFID tag near the device.")
+                    Text("The system will check if the tag already contains data.")
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    // Read existing tag data first
+                    val existingData = c72RfidReader.readTag()
+                    existingRfidData = existingData
+                    
+                    if (existingData != null) {
+                        // Tag has data - show confirmation dialog
+                        showRfidDialog = false
+                        showRfidConfirmDialog = true
+                    } else {
+                        // Tag is blank - write directly
+                        val success = c72RfidReader.writeTag(rfidAssetToWrite!!.id.toString().padStart(6, '0'))
+                        if (success) {
+                            coroutineScope.launch {
+                                snackbarHostState.showSnackbar("RFID tag written successfully")
+                            }
+                        } else {
+                            coroutineScope.launch {
+                                snackbarHostState.showSnackbar("Failed to write RFID tag")
+                            }
+                        }
+                        showRfidDialog = false
+                        rfidAssetToWrite = null
+                    }
+                }) {
+                    Text("Write Tag")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { 
+                    showRfidDialog = false
+                    rfidAssetToWrite = null
+                    existingRfidData = null
+                }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    if (showRfidConfirmDialog && rfidAssetToWrite != null && existingRfidData != null) {
+        val isAssetId = existingRfidData == rfidAssetToWrite!!.id.toString().padStart(6, '0')
+        
+        AlertDialog(
+            onDismissRequest = { 
+                showRfidConfirmDialog = false
+                rfidAssetToWrite = null
+                existingRfidData = null
+            },
+            title = { Text("RFID Tag Already Has Data") },
+            text = {
+                Column {
+                    if (isAssetId) {
+                        Text("This RFID tag is already attached to this asset!")
+                        Text("Asset ID: $existingRfidData")
+                    } else {
+                        Text("This RFID tag contains data: $existingRfidData")
+                        Text("")
+                        Text("Do you want to overwrite it with this asset's ID?")
+                        Text("Asset: ${rfidAssetToWrite?.name}")
+                        Text("New ID: ${rfidAssetToWrite?.id?.toString()?.padStart(6, '0')}")
+                    }
+                }
+            },
+            confirmButton = {
+                if (!isAssetId) {
+                    Button(onClick = {
+                        // Kill existing data and write new data
+                        val killed = c72RfidReader.killTag("00000000") // Default password
+                        if (killed) {
+                            val success = c72RfidReader.writeTag(rfidAssetToWrite!!.id.toString().padStart(6, '0'))
+                            if (success) {
+                                coroutineScope.launch {
+                                    snackbarHostState.showSnackbar("RFID tag overwritten successfully")
+                                }
+                            } else {
+                                coroutineScope.launch {
+                                    snackbarHostState.showSnackbar("Failed to write RFID tag")
+                                }
+                            }
+                        } else {
+                            coroutineScope.launch {
+                                snackbarHostState.showSnackbar("Failed to clear existing RFID data")
+                            }
+                        }
+                        showRfidConfirmDialog = false
+                        rfidAssetToWrite = null
+                        existingRfidData = null
+                    }) {
+                        Text("Overwrite")
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { 
+                    showRfidConfirmDialog = false
+                    rfidAssetToWrite = null
+                    existingRfidData = null
+                }) {
+                    Text(if (isAssetId) "OK" else "Cancel")
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -325,7 +462,8 @@ private fun AssetCard(
     asset: AssetSummary,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
-    onPrint: () -> Unit
+    onPrint: () -> Unit,
+    onRfidWrite: () -> Unit
 ) {
     val barcodeBitmap = rememberBarcodeImage(content = asset.id.toString(), width = 800, height = 220)
     Card(
@@ -452,6 +590,19 @@ private fun AssetCard(
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                IconButton(
+                    onClick = onRfidWrite,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.tertiaryContainer)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.QrCodeScanner, // Using QrCodeScanner as RFID icon
+                        contentDescription = "Write RFID tag",
+                        tint = MaterialTheme.colorScheme.onTertiaryContainer
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
                 IconButton(
                     onClick = onPrint,
                     modifier = Modifier

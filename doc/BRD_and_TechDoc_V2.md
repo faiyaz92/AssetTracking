@@ -1,5 +1,10 @@
 # Asset Tracking Application - BRD V2 (with RFID Support)
 
+## Document Cross-References
+- **Integration Guide**: `Chainway_C72_Integration_Guide.md` - Device specifications and SDK methods
+- **Task Checklist V2**: `C72_Integration_Task_Checklist_V2.md` - Implementation tasks with AI notes
+- **Cross-Reference Guide**: `BRD_TechDoc_V2_Cross_Reference.md` - Document relationships and traceability
+
 ## Table of Contents
 1. [Business Requirements Document (BRD)](#business-requirements-document-brd)
    - [Introduction](#introduction)
@@ -68,11 +73,14 @@ The Asset Tracking Application is a mobile solution designed for Android devices
 - Printed barcodes are used for physical asset labeling and subsequent scanning for assignment.
 
 #### FR-009: RFID Asset Tracking (NEW)
-- Support for RFID tag scanning alongside barcode scanning.
+- Support for Chainway C72 UHF RFID scanning alongside barcode scanning.
 - RFID tags contain the same asset ID as barcodes for consistent tracking.
-- Contactless scanning for improved efficiency in certain environments.
-- Dual scanning modes: users can choose barcode or RFID scanning.
+- Contactless scanning with 1-8 meter range for improved efficiency.
+- RFID tag writing capability for programming blank tags with asset IDs.
+- Tag validation: check for existing data before writing, show appropriate warnings.
+- Dual scanning modes: users can choose barcode, NFC, or UHF RFID scanning.
 - RFID scanning maintains same assignment and movement workflows as barcode.
+- **Cross-Reference**: Task 1-4 in `C72_Integration_Task_Checklist_V2.md`
 
 #### FR-005: Search and Filtering
 - Search assets by name or code.
@@ -109,7 +117,11 @@ The Asset Tracking Application is a mobile solution designed for Android devices
 - Acceptance Criteria: Quick scan button on home screen; scan barcode/RFID, select location, enter condition, confirm move.
 
 #### US-009: As a user, I want to scan RFID tags so that I can use contactless asset tracking.
-- Acceptance Criteria: RFID scanning option in scan dialogs; same asset ID as barcode; maintains all existing workflows.
+- Acceptance Criteria: RFID scanning option in scan dialogs; same asset ID as barcode; maintains all existing workflows; supports Chainway C72 UHF RFID with 1-8 meter range.
+
+#### US-010: As a user, I want to write RFID tags so that I can program blank tags with asset IDs.
+- Acceptance Criteria: RFID write button on asset rows; validates existing tag data; shows confirmation dialogs for overwriting; writes pure asset ID to EPC field; handles tag locking and killing as needed.
+- **Cross-Reference**: Task 2 in `C72_Integration_Task_Checklist_V2.md`
 
 ### Non-Functional Requirements
 - **Performance**: App should load data quickly (<2s for lists).

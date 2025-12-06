@@ -9,6 +9,7 @@ import com.example.assettracking.domain.usecase.FindAssetByIdUseCase
 import com.example.assettracking.domain.usecase.ObserveRoomDetailUseCase
 import com.example.assettracking.domain.usecase.UpdateCurrentRoomUseCase
 import com.example.assettracking.presentation.common.UiMessage
+import com.example.assettracking.util.RfidReader
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,7 +28,8 @@ class LocationDetailViewModel @Inject constructor(
     private val detachAssetFromRoomUseCase: DetachAssetFromRoomUseCase,
     private val findAssetByIdUseCase: FindAssetByIdUseCase,
     private val updateCurrentRoomUseCase: UpdateCurrentRoomUseCase,
-    private val createMovementUseCase: CreateMovementUseCase
+    private val createMovementUseCase: CreateMovementUseCase,
+    private val rfidReader: RfidReader
 ) : ViewModel() {
 
     private val locationId: Long = checkNotNull(savedStateHandle[LOCATION_ID_KEY])
@@ -86,6 +88,27 @@ class LocationDetailViewModel @Inject constructor(
                 _uiState.update { it.copy(message = UiMessage(error.message ?: "Unable to detach asset")) }
             }
         }
+    }
+
+    fun startRfidScan() {
+        _uiState.update { it.copy(isRfidScanning = true, scannedRfidTags = emptyList()) }
+        viewModelScope.launch {
+            try {
+                val tags = rfidReader.inventory()
+                _uiState.update { it.copy(scannedRfidTags = tags, isRfidScanning = false) }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        message = UiMessage("RFID scan failed: ${e.message}"),
+                        isRfidScanning = false
+                    )
+                }
+            }
+        }
+    }
+
+    fun clearRfidScan() {
+        _uiState.update { it.copy(scannedRfidTags = emptyList(), isRfidScanning = false) }
     }
 
     private fun observeLocationDetails() {

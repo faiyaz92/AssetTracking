@@ -1,5 +1,11 @@
 # Chainway C72 RFID Integration Guide for Asset Tracking App
 
+## Document Cross-References
+- **BRD V2**: `BRD_and_TechDoc_V2.md` - Business requirements for RFID integration
+- **TechDoc V2**: `TechDoc_V2_RFID_Integration.md` - Technical implementation details
+- **Task Checklist V2**: `C72_Integration_Task_Checklist_V2.md` - Implementation tasks with AI notes
+- **Cross-Reference Guide**: `BRD_TechDoc_V2_Cross_Reference.md` - Document relationships and traceability
+
 ## Device Overview
 
 The **Chainway C72** is a rugged Android-based UHF RFID reader/handheld terminal designed for industrial asset tracking and inventory management applications.
@@ -58,6 +64,131 @@ uhfReader.startInventory() // Start reading tags
 // Add Chainway SDK dependency
 implementation 'com.chainway:uhf-sdk:1.0.0'
 ```
+
+## Chainway C72 SDK Methods and Guidelines
+
+### SDK Initialization
+```kotlin
+// Get UHF reader instance
+val uhfReader = UHFReader.getInstance()
+
+// Initialize the reader
+val result = uhfReader.open(context)
+if (result == 0) {
+    // Success - reader initialized
+} else {
+    // Error - handle initialization failure
+}
+```
+
+### Core SDK Methods
+
+#### Read Operations
+```kotlin
+// Method 1: Start inventory (continuous reading)
+fun startInventory(): Int {
+    // Returns 0 on success
+    // Reads all tags in range continuously
+    return uhfReader.startInventory()
+}
+
+// Method 2: Stop inventory
+fun stopInventory(): Int {
+    return uhfReader.stopInventory()
+}
+
+// Method 3: Single tag read
+fun readTag(): TagData? {
+    // Returns tag data or null if no tag found
+    return uhfReader.readTag()
+}
+
+// Method 4: Read specific memory bank
+fun readTagMem(epc: String, memBank: Int, wordPtr: Int, numWords: Int): String? {
+    // memBank: 0=EPC, 1=TID, 2=User, 3=Reserved
+    return uhfReader.readTagMem(epc, memBank, wordPtr, numWords)
+}
+```
+
+#### Write Operations
+```kotlin
+// Method 1: Write to EPC (main identifier)
+fun writeTag(epc: String, newEpc: String): Int {
+    // Returns 0 on success
+    // Writes new EPC data to tag
+    return uhfReader.writeTag(epc, newEpc)
+}
+
+// Method 2: Write to User Memory
+fun writeTagMem(epc: String, memBank: Int, wordPtr: Int, data: String): Int {
+    // Write data to specific memory bank
+    return uhfReader.writeTagMem(epc, memBank, wordPtr, data)
+}
+```
+
+#### Tag Management
+```kotlin
+// Method 1: Kill tag (permanent disable)
+fun killTag(epc: String, password: String): Int {
+    // Permanently disables tag - irreversible
+    // Use for rewriting tags with existing data
+    return uhfReader.killTag(epc, password)
+}
+
+// Method 2: Lock tag memory
+fun lockTag(epc: String, lockPayload: String): Int {
+    // Locks specific memory banks to prevent writing
+    return uhfReader.lockTag(epc, lockPayload)
+}
+
+// Method 3: Set access password
+fun setPassword(epc: String, oldPassword: String, newPassword: String): Int {
+    // Set or change tag access password
+    return uhfReader.setPassword(epc, oldPassword, newPassword)
+}
+```
+
+#### Configuration Methods
+```kotlin
+// Method 1: Set power level
+fun setPower(power: Int): Int {
+    // Power in dBm (10-30 typically)
+    return uhfReader.setPower(power)
+}
+
+// Method 2: Get current power
+fun getPower(): Int {
+    return uhfReader.getPower()
+}
+
+// Method 3: Set frequency region
+fun setFrequency(region: Int): Int {
+    // Region codes: 0=US, 1=EU, etc.
+    return uhfReader.setFrequency(region)
+}
+```
+
+### Error Codes
+- **0**: Success
+- **-1**: Command failed
+- **-2**: No tag found
+- **-3**: Tag locked/protected
+- **-4**: Invalid parameters
+- **-5**: Hardware error
+
+### Best Practices
+1. **Always check return codes** from SDK methods
+2. **Use kill() method** before rewriting tags with existing data
+3. **Handle tag locking** appropriately for security
+4. **Set appropriate power levels** for different environments
+5. **Implement proper error handling** for all operations
+6. **Close reader** when not in use to save battery
+
+### Tag Data Format
+- **EPC**: Up to 96 bits (12 bytes) - store asset ID here
+- **TID**: Tag identifier (read-only)
+- **User Memory**: Additional data storage
+- **Password**: Access control (32-bit)
 
 ## Technical Integration Details
 

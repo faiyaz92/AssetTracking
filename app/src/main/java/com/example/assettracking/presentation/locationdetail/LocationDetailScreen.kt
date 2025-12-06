@@ -4,11 +4,13 @@ package com.example.assettracking.presentation.locationdetail
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -25,6 +27,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material.icons.filled.RssFeed
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -36,6 +39,7 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -51,8 +55,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -81,6 +85,8 @@ fun LocationDetailScreen(
 
     val (showDeleteDialog, setShowDeleteDialog) = remember { mutableStateOf(false) }
     val (assetToDelete, setAssetToDelete) = remember { mutableStateOf<AssetSummary?>(null) }
+
+    val (showRfidDialog, setShowRfidDialog) = remember { mutableStateOf(false) }
 
     val scannerLauncher = rememberLauncherForActivityResult(
         contract = ScanContract()
@@ -145,10 +151,23 @@ fun LocationDetailScreen(
         },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = { scannerLauncher.launch(scanOptions) }
+            Row(
+                modifier = Modifier.padding(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Icon(imageVector = Icons.Default.QrCodeScanner, contentDescription = "Scan barcode")
+                FloatingActionButton(
+                    onClick = { scannerLauncher.launch(scanOptions) }
+                ) {
+                    Icon(imageVector = Icons.Default.QrCodeScanner, contentDescription = "Scan barcode")
+                }
+                FloatingActionButton(
+                    onClick = {
+                        viewModel.startRfidScan()
+                        setShowRfidDialog(true)
+                    }
+                ) {
+                    Icon(imageVector = Icons.Default.RssFeed, contentDescription = "Scan RFID")
+                }
             }
         }
     ) { paddingValues ->
@@ -206,6 +225,68 @@ fun LocationDetailScreen(
                     setAssetToDelete(null)
                 }) {
                     Text("Cancel")
+                }
+            }
+        )
+    }
+
+    if (showRfidDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                setShowRfidDialog(false)
+                viewModel.clearRfidScan()
+            },
+            title = { Text("RFID Scan Results") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    if (state.isRfidScanning) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Scanning for RFID tags...")
+                        }
+                    } else if (state.scannedRfidTags.isEmpty()) {
+                        Text("No RFID tags found. Try scanning again.")
+                    } else {
+                        Text("Select an asset tag to assign:")
+                        state.scannedRfidTags.forEach { tag ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable {
+                                        viewModel.assignAsset(tag)
+                                        setShowRfidDialog(false)
+                                        viewModel.clearRfidScan()
+                                    },
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = false, // No selection state needed
+                                    onClick = {
+                                        viewModel.assignAsset(tag)
+                                        setShowRfidDialog(false)
+                                        viewModel.clearRfidScan()
+                                    }
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Tag: $tag")
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                if (!state.isRfidScanning) {
+                    TextButton(onClick = {
+                        setShowRfidDialog(false)
+                        viewModel.clearRfidScan()
+                    }) {
+                        Text("Close")
+                    }
+                } else {
+                    // No button while scanning
                 }
             }
         )
