@@ -3,11 +3,11 @@
 package com.example.assettracking.presentation.assets
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,7 +18,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
@@ -28,7 +30,6 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -70,6 +71,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
@@ -90,6 +92,7 @@ import com.example.assettracking.presentation.tabs.viewmodel.AssetListViewModel
 import com.example.assettracking.util.C72RfidReader
 import com.example.assettracking.util.printBarcode
 import com.example.assettracking.util.rememberBarcodeImage
+import com.example.assettracking.util.RfidHardwareException
 
 @Composable
 fun AssetsScreen(
@@ -120,6 +123,10 @@ fun AssetsScreen(
     var showRfidConfirmDialog by remember { mutableStateOf(false) }
     var rfidAssetToWrite by remember { mutableStateOf<AssetSummary?>(null) }
     var existingRfidData by remember { mutableStateOf<String?>(null) }
+
+    // Error dialog state
+    var showErrorDialog by remember { mutableStateOf(false) }
+    var errorDetails by remember { mutableStateOf<Pair<String, String>?>(null) }
 
     // Permission handling for Bluetooth printing
     var pendingPrintAsset by remember { mutableStateOf<AssetSummary?>(null) }
@@ -353,24 +360,52 @@ fun AssetsScreen(
             confirmButton = {
                 Button(onClick = {
                     // Read existing tag data first
-                    val existingData = c72RfidReader.readTag()
-                    existingRfidData = existingData
-                    
-                    if (existingData != null) {
-                        // Tag has data - show confirmation dialog
-                        showRfidDialog = false
-                        showRfidConfirmDialog = true
-                    } else {
-                        // Tag is blank - write directly
-                        val success = c72RfidReader.writeTag(rfidAssetToWrite!!.id.toString().padStart(6, '0'))
-                        if (success) {
-                            coroutineScope.launch {
-                                snackbarHostState.showSnackbar("RFID tag written successfully")
-                            }
+                    try {
+                        val existingData = c72RfidReader.readTag()
+                        existingRfidData = existingData
+
+                        if (existingData != null) {
+                            // Tag has data - show confirmation dialog
+                            showRfidDialog = false
+                            showRfidConfirmDialog = true
                         } else {
-                            coroutineScope.launch {
-                                snackbarHostState.showSnackbar("Failed to write RFID tag")
+                            // Tag is blank - write directly
+                            val success = c72RfidReader.writeTag(rfidAssetToWrite!!.id.toString().padStart(6, '0'))
+                            if (success) {
+                                coroutineScope.launch {
+                                    snackbarHostState.showSnackbar("RFID tag written successfully")
+                                }
+                            } else {
+                                coroutineScope.launch {
+                                    snackbarHostState.showSnackbar("Failed to write RFID tag")
+                                }
                             }
+                            showRfidDialog = false
+                            rfidAssetToWrite = null
+                        }
+                    } catch (e: RfidHardwareException) {
+                        val errorMessage = when {
+                            e.message?.contains("not found") == true -> "RFID hardware not detected. Please ensure you're using a device with RFID capabilities."
+                            e.message?.contains("not initialized") == true -> "RFID hardware failed to initialize. Check device connections and try again."
+                            e.message?.contains("permission") == true -> "Permission denied for RFID access. Please grant necessary permissions."
+                            e.message?.contains("connection") == true -> "Failed to connect to RFID module. Check hardware connections."
+                            else -> e.message ?: "RFID hardware error occurred."
+                        }
+                        val stackTrace = android.util.Log.getStackTraceString(e)
+                        errorDetails = Pair(errorMessage, stackTrace)
+                        showErrorDialog = true
+                        coroutineScope.launch {
+                            snackbarHostState.showSnackbar(errorMessage)
+                        }
+                        showRfidDialog = false
+                        rfidAssetToWrite = null
+                    } catch (e: Exception) {
+                        val errorMessage = "Unexpected error: ${e.message}"
+                        val stackTrace = android.util.Log.getStackTraceString(e)
+                        errorDetails = Pair(errorMessage, stackTrace)
+                        showErrorDialog = true
+                        coroutineScope.launch {
+                            snackbarHostState.showSnackbar(errorMessage)
                         }
                         showRfidDialog = false
                         rfidAssetToWrite = null
@@ -380,12 +415,20 @@ fun AssetsScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { 
-                    showRfidDialog = false
-                    rfidAssetToWrite = null
-                    existingRfidData = null
-                }) {
-                    Text("Cancel")
+                Row {
+                    if (errorDetails != null) {
+                        TextButton(onClick = { showErrorDialog = true }) {
+                            Text("Show Error Details")
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
+                    TextButton(onClick = { 
+                        showRfidDialog = false
+                        rfidAssetToWrite = null
+                        existingRfidData = null
+                    }) {
+                        Text("Cancel")
+                    }
                 }
             }
         )
@@ -418,22 +461,46 @@ fun AssetsScreen(
             confirmButton = {
                 if (!isAssetId) {
                     Button(onClick = {
-                        // Kill existing data and write new data
-                        val killed = c72RfidReader.killTag("00000000") // Default password
-                        if (killed) {
-                            val success = c72RfidReader.writeTag(rfidAssetToWrite!!.id.toString().padStart(6, '0'))
-                            if (success) {
-                                coroutineScope.launch {
-                                    snackbarHostState.showSnackbar("RFID tag overwritten successfully")
+                        try {
+                            // Kill existing data and write new data
+                            val killed = c72RfidReader.killTag("00000000") // Default password
+                            if (killed) {
+                                val success = c72RfidReader.writeTag(rfidAssetToWrite!!.id.toString().padStart(6, '0'))
+                                if (success) {
+                                    coroutineScope.launch {
+                                        snackbarHostState.showSnackbar("RFID tag overwritten successfully")
+                                    }
+                                } else {
+                                    coroutineScope.launch {
+                                        snackbarHostState.showSnackbar("Failed to write RFID tag")
+                                    }
                                 }
                             } else {
                                 coroutineScope.launch {
-                                    snackbarHostState.showSnackbar("Failed to write RFID tag")
+                                    snackbarHostState.showSnackbar("Failed to clear existing RFID data")
                                 }
                             }
-                        } else {
+                        } catch (e: RfidHardwareException) {
+                            val errorMessage = when {
+                                e.message?.contains("not found") == true -> "RFID hardware not detected. Please ensure you're using a device with RFID capabilities."
+                                e.message?.contains("not initialized") == true -> "RFID hardware failed to initialize. Check device connections and try again."
+                                e.message?.contains("permission") == true -> "Permission denied for RFID access. Please grant necessary permissions."
+                                e.message?.contains("connection") == true -> "Failed to connect to RFID module. Check hardware connections."
+                                else -> e.message ?: "RFID hardware error occurred."
+                            }
+                            val stackTrace = android.util.Log.getStackTraceString(e)
+                            errorDetails = Pair(errorMessage, stackTrace)
+                            showErrorDialog = true
                             coroutineScope.launch {
-                                snackbarHostState.showSnackbar("Failed to clear existing RFID data")
+                                snackbarHostState.showSnackbar(errorMessage)
+                            }
+                        } catch (e: Exception) {
+                            val errorMessage = "Unexpected error: ${e.message}"
+                            val stackTrace = android.util.Log.getStackTraceString(e)
+                            errorDetails = Pair(errorMessage, stackTrace)
+                            showErrorDialog = true
+                            coroutineScope.launch {
+                                snackbarHostState.showSnackbar(errorMessage)
                             }
                         }
                         showRfidConfirmDialog = false
@@ -455,8 +522,103 @@ fun AssetsScreen(
             }
         )
     }
-}
 
+    // Error Dialog
+    if (showErrorDialog && errorDetails != null) {
+        AlertDialog(
+            onDismissRequest = { showErrorDialog = false },
+            title = { Text("Error Details") },
+            text = {
+                Column {
+                    Text("An error occurred during RFID operation:")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = errorDetails!!.first,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Full Stack Trace:")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = errorDetails!!.second,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace,
+                        modifier = Modifier
+                            .verticalScroll(rememberScrollState())
+                            .height(200.dp)
+                    )
+                }
+            },
+            confirmButton = {
+                Row {
+                    TextButton(onClick = {
+                        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                        val clip = android.content.ClipData.newPlainText("Error Details", "${errorDetails!!.first}\n\nStack Trace:\n${errorDetails!!.second}")
+                        clipboard.setPrimaryClip(clip)
+                        coroutineScope.launch {
+                            snackbarHostState.showSnackbar("Error details copied to clipboard")
+                        }
+                    }) {
+                        Text("Copy Details")
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    TextButton(onClick = { showErrorDialog = false }) {
+                        Text("Close")
+                    }
+                }
+            }
+        )
+    }
+
+    // Error Dialog
+    if (showErrorDialog && errorDetails != null) {
+        AlertDialog(
+            onDismissRequest = { showErrorDialog = false },
+            title = { Text("Error Details") },
+            text = {
+                Column {
+                    Text("An error occurred during RFID operation:")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = errorDetails!!.first,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Full Stack Trace:")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = errorDetails!!.second,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace,
+                        modifier = Modifier
+                            .verticalScroll(rememberScrollState())
+                            .height(200.dp)
+                    )
+                }
+            },
+            confirmButton = {
+                Row {
+                    TextButton(onClick = {
+                        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                        val clip = android.content.ClipData.newPlainText("Error Details", "${errorDetails!!.first}\n\nStack Trace:\n${errorDetails!!.second}")
+                        clipboard.setPrimaryClip(clip)
+                        coroutineScope.launch {
+                            snackbarHostState.showSnackbar("Error details copied to clipboard")
+                        }
+                    }) {
+                        Text("Copy Details")
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    TextButton(onClick = { showErrorDialog = false }) {
+                        Text("Close")
+                    }
+                }
+            }
+        )
+    }
+}
 @Composable
 private fun AssetCard(
     asset: AssetSummary,

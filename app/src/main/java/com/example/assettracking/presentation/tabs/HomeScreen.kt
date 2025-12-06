@@ -584,6 +584,8 @@ fun RfidScanDialog(
     val selectedRoomId = remember { mutableStateOf<Long?>(null) }
     val condition = remember { mutableStateOf("") }
     val showConditionDialog = remember { mutableStateOf(false) }
+    val showErrorDialog = remember { mutableStateOf(false) }
+    val errorDetails = remember { mutableStateOf<Pair<String, String>?>(null) }
 
     val rfidScanState by viewModel.rfidScanState.collectAsState()
 
@@ -749,13 +751,27 @@ fun RfidScanDialog(
                         }
                     }
                     is HomeViewModel.RfidScanState.Error -> {
-                        val error = (rfidScanState as HomeViewModel.RfidScanState.Error).message
-                        Text("Scan failed: $error")
-                        Button(
-                            onClick = { viewModel.startRfidScan() },
-                            modifier = Modifier.fillMaxWidth()
+                        val errorState = (rfidScanState as HomeViewModel.RfidScanState.Error)
+                        Text("Scan failed: ${errorState.message}")
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Text("Try Again")
+                            Button(
+                                onClick = {
+                                    errorDetails.value = Pair(errorState.message, errorState.stackTrace)
+                                    showErrorDialog.value = true
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Details")
+                            }
+                            Button(
+                                onClick = { viewModel.startRfidScan() },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Try Again")
+                            }
                         }
                     }
                 }
@@ -767,4 +783,55 @@ fun RfidScanDialog(
             }
         }
     )
+
+    // Error Details Dialog
+    if (showErrorDialog.value && errorDetails.value != null) {
+        val (message, stackTrace) = errorDetails.value!!
+        val context = LocalContext.current
+
+        AlertDialog(
+            onDismissRequest = { showErrorDialog.value = false },
+            title = { Text("Error Details") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Text("Error Message:", style = MaterialTheme.typography.titleSmall)
+                    Text(message, style = MaterialTheme.typography.bodyMedium)
+
+                    if (stackTrace.isNotEmpty()) {
+                        Text("Stack Trace:", style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            stackTrace,
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp)
+                                .verticalScroll(rememberScrollState())
+                                .background(
+                                    MaterialTheme.colorScheme.surfaceVariant,
+                                    RoundedCornerShape(4.dp)
+                                )
+                                .padding(8.dp)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = {
+                        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                        val clip = android.content.ClipData.newPlainText("Error Details", "Message: $message\n\nStack Trace:\n$stackTrace")
+                        clipboard.setPrimaryClip(clip)
+                        // You could show a toast here if needed
+                    }) {
+                        Text("Copy")
+                    }
+                    TextButton(onClick = { showErrorDialog.value = false }) {
+                        Text("Close")
+                    }
+                }
+            }
+        )
+    }
 }

@@ -10,6 +10,7 @@ import com.example.assettracking.domain.usecase.ObserveRoomDetailUseCase
 import com.example.assettracking.domain.usecase.UpdateCurrentRoomUseCase
 import com.example.assettracking.presentation.common.UiMessage
 import com.example.assettracking.util.RfidReader
+import com.example.assettracking.util.RfidHardwareException
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -96,10 +97,29 @@ class LocationDetailViewModel @Inject constructor(
             try {
                 val tags = rfidReader.inventory()
                 _uiState.update { it.copy(scannedRfidTags = tags, isRfidScanning = false) }
-            } catch (e: Exception) {
+            } catch (e: RfidHardwareException) {
+                // Handle hardware-specific errors with user-friendly messages
+                val errorMessage = when {
+                    e.message?.contains("not found") == true -> "RFID hardware not detected. Please ensure you're using a device with RFID capabilities."
+                    e.message?.contains("not initialized") == true -> "RFID hardware failed to initialize. Check device connections and try again."
+                    e.message?.contains("permission") == true -> "Permission denied for RFID access. Please grant necessary permissions."
+                    e.message?.contains("connection") == true -> "Failed to connect to RFID module. Check hardware connections."
+                    e.message?.contains("timeout") == true -> "RFID scan timeout. No tags found in scan area. Try moving closer to RFID tags."
+                    else -> e.message ?: "RFID scan failed due to hardware error."
+                }
+                val stackTrace = android.util.Log.getStackTraceString(e)
                 _uiState.update {
                     it.copy(
-                        message = UiMessage("RFID scan failed: ${e.message}"),
+                        message = UiMessage(errorMessage, stackTrace),
+                        isRfidScanning = false
+                    )
+                }
+            } catch (e: Exception) {
+                val errorMessage = "Unexpected error during RFID scan: ${e.message}"
+                val stackTrace = android.util.Log.getStackTraceString(e)
+                _uiState.update {
+                    it.copy(
+                        message = UiMessage(errorMessage, stackTrace),
                         isRfidScanning = false
                     )
                 }

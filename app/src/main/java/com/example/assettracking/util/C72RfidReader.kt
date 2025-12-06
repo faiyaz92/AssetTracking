@@ -13,6 +13,31 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
+ * Custom exception for RFID hardware-related errors
+ */
+class RfidHardwareException(message: String, cause: Throwable? = null) : Exception(message, cause) {
+    companion object {
+        fun hardwareNotFound() = RfidHardwareException("RFID hardware not found. Please ensure the device has RFID capabilities.")
+        fun hardwareNotInitialized() = RfidHardwareException("RFID hardware failed to initialize. Check device connections.")
+        fun permissionDenied() = RfidHardwareException("Permission denied for RFID hardware access.")
+        fun connectionFailed() = RfidHardwareException("Failed to connect to RFID module. Check UART connection.")
+        fun scanTimeout() = RfidHardwareException("RFID scan timeout. No tags found in scan area.")
+        
+        private fun sanitizeErrorMessage(message: String?): String {
+            return when {
+                message.isNullOrBlank() -> "Unknown hardware error occurred"
+                message.contains("null", ignoreCase = true) ||
+                message.contains("NullPointerException", ignoreCase = true) ||
+                message.contains("String.contains", ignoreCase = true) -> "RFID hardware communication error. Please check device connections and try again."
+                else -> message
+            }
+        }
+        
+        fun unknownError(message: String?) = RfidHardwareException("RFID error: ${sanitizeErrorMessage(message)}")
+    }
+}
+
+/**
  * Chainway C72 UHF RFID Reader utility class
  * Handles UHF RFID operations for asset tracking
  *
@@ -40,8 +65,8 @@ class C72RfidReader @Inject constructor(
                     Log.d(TAG, "UHF Reader initialized successfully")
                     true
                 } else {
-                    Log.e(TAG, "Failed to initialize UHF Reader")
-                    false
+                    Log.e(TAG, "Failed to initialize UHF Reader - Hardware not available or not connected")
+                    throw RfidHardwareException.hardwareNotInitialized()
                 }
             } else {
                 // Mock implementation
@@ -49,9 +74,28 @@ class C72RfidReader @Inject constructor(
                 uhfReader = null // Mock doesn't need reader object
                 true
             }
+        } catch (e: RfidHardwareException) {
+            // Re-throw our custom exceptions
+            throw e
         } catch (e: Exception) {
-            Log.e(TAG, "Error initializing UHF Reader", e)
-            false
+            Log.e(TAG, "Error initializing UHF Reader: ${e.message}", e)
+            // Check for common hardware-related exceptions and throw specific ones
+            when {
+                e.message?.contains("device", ignoreCase = true) == true ||
+                e.message?.contains("hardware", ignoreCase = true) == true -> {
+                    throw RfidHardwareException.hardwareNotFound()
+                }
+                e.message?.contains("permission", ignoreCase = true) == true -> {
+                    throw RfidHardwareException.permissionDenied()
+                }
+                e.message?.contains("connect", ignoreCase = true) == true ||
+                e.message?.contains("uart", ignoreCase = true) == true -> {
+                    throw RfidHardwareException.connectionFailed()
+                }
+                else -> {
+                    throw RfidHardwareException.unknownError(e.message)
+                }
+            }
         }
     }
 
@@ -77,9 +121,11 @@ class C72RfidReader @Inject constructor(
                 Log.d(TAG, "Mock tag read - returning test asset ID")
                 "000001"
             }
+        } catch (e: RfidHardwareException) {
+            throw e
         } catch (e: Exception) {
             Log.e(TAG, "Error reading tag", e)
-            null
+            throw RfidHardwareException.unknownError(e.message)
         }
     }
 
@@ -107,9 +153,11 @@ class C72RfidReader @Inject constructor(
                 Log.d(TAG, "Mock tag write successful for asset ID: $assetId")
                 true
             }
+        } catch (e: RfidHardwareException) {
+            throw e
         } catch (e: Exception) {
             Log.e(TAG, "Error writing tag", e)
-            false
+            throw RfidHardwareException.unknownError(e.message)
         }
     }
 
@@ -138,15 +186,23 @@ class C72RfidReader @Inject constructor(
     }
 
     override suspend fun inventory(): List<String> {
-        return startInventory().first()
+        return try {
+            startInventory().first()
+        } catch (e: RfidHardwareException) {
+            // Re-throw hardware-specific exceptions
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "Inventory failed: ${e.message}", e)
+            // Convert to hardware exception for consistency
+            throw RfidHardwareException.unknownError(e.message)
+        }
     }
 
     override fun startInventory(): Flow<List<String>> = flow {
         try {
             if (uhfReader == null && !initialize()) {
-                Log.e(TAG, "Reader not available for inventory")
-                emit(emptyList())
-                return@flow
+                Log.e(TAG, "Reader not available for inventory - Hardware initialization failed")
+                throw RfidHardwareException.hardwareNotInitialized()
             }
 
             if (USE_REAL_SDK) {
@@ -156,9 +212,25 @@ class C72RfidReader @Inject constructor(
                 val duration = 3000L // 3 seconds of scanning
 
                 while (System.currentTimeMillis() - startTime < duration) {
-                    val tagInfo = uhfReader?.inventorySingleTag()
-                    if (tagInfo != null && !tagInfo.epc.isNullOrEmpty()) {
-                        foundTags.add(tagInfo.epc)
+                    try {
+                        val tagInfo = uhfReader?.inventorySingleTag()
+                        if (tagInfo != null && !tagInfo.epc.isNullOrEmpty()) {
+                            foundTags.add(tagInfo.epc)
+                        }
+                    } catch (scanException: Exception) {
+                        Log.w(TAG, "Error during single tag scan: ${scanException.message}")
+                        // Check if it's a hardware-related error
+                        when {
+                            scanException.message?.contains("device", ignoreCase = true) == true -> {
+                                throw RfidHardwareException.hardwareNotFound()
+                            }
+                            scanException.message?.contains("timeout", ignoreCase = true) == true -> {
+                                throw RfidHardwareException.scanTimeout()
+                            }
+                            else -> {
+                                // Continue scanning despite individual scan errors
+                            }
+                        }
                     }
                     delay(100) // Small delay between scans
                 }
@@ -172,9 +244,20 @@ class C72RfidReader @Inject constructor(
                 delay(1000)
                 emit(listOf("000001", "000002", "000003"))
             }
+        } catch (e: RfidHardwareException) {
+            // Re-throw hardware-specific exceptions
+            throw e
         } catch (e: Exception) {
-            Log.e(TAG, "Error during inventory", e)
-            emit(emptyList())
+            Log.e(TAG, "Critical error during inventory scan: ${e.message}", e)
+            // Convert to appropriate hardware exception
+            when {
+                e.message?.contains("timeout", ignoreCase = true) == true -> {
+                    throw RfidHardwareException.scanTimeout()
+                }
+                else -> {
+                    throw RfidHardwareException.unknownError(e.message)
+                }
+            }
         }
     }
 

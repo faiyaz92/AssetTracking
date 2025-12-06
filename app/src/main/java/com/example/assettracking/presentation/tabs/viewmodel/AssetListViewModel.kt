@@ -55,7 +55,7 @@ class AssetListViewModel @Inject constructor(
                 _uiState.update { state ->
                     val filtered = if (currentQuery.isBlank()) assets else assets.filter { asset ->
                         asset.id.toString().padStart(6, '0').contains(currentQuery, ignoreCase = true) ||
-                            asset.name.contains(currentQuery, ignoreCase = true)
+                            asset.name?.contains(currentQuery, ignoreCase = true) == true
                     }
                     state.copy(
                         assets = assets,
@@ -111,7 +111,7 @@ class AssetListViewModel @Inject constructor(
             } else {
                 state.assets.filter { asset ->
                     asset.id.toString().padStart(6, '0').contains(query, ignoreCase = true) ||
-                        asset.name.contains(query, ignoreCase = true)
+                        asset.name?.contains(query, ignoreCase = true) == true
                 }
             }
             state.copy(searchQuery = query, filteredAssets = filtered)

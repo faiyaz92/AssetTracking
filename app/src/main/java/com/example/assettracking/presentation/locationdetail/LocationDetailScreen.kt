@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -20,7 +19,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
@@ -58,6 +59,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -75,18 +80,22 @@ fun LocationDetailScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    LaunchedEffect(state.message) {
-        val message = state.message?.text
-        if (message != null) {
-            snackbarHostState.showSnackbar(message)
-            viewModel.clearMessage()
-        }
-    }
-
     val (showDeleteDialog, setShowDeleteDialog) = remember { mutableStateOf(false) }
     val (assetToDelete, setAssetToDelete) = remember { mutableStateOf<AssetSummary?>(null) }
 
     val (showRfidDialog, setShowRfidDialog) = remember { mutableStateOf(false) }
+    val (showErrorDialog, setShowErrorDialog) = remember { mutableStateOf(false) }
+    val (errorDetails, setErrorDetails) = remember { mutableStateOf<Pair<String, String>?>(null) }
+
+    LaunchedEffect(state.message) {
+        val message = state.message
+        if (message != null) {
+            // Store error details for the error dialog
+            setErrorDetails(Pair(message.text, message.stackTrace))
+            snackbarHostState.showSnackbar(message.text)
+            viewModel.clearMessage()
+        }
+    }
 
     val scannerLauncher = rememberLauncherForActivityResult(
         contract = ScanContract()
@@ -246,7 +255,15 @@ fun LocationDetailScreen(
                             Text("Scanning for RFID tags...")
                         }
                     } else if (state.scannedRfidTags.isEmpty()) {
-                        Text("No RFID tags found. Try scanning again.")
+                        Column {
+                            Text("No RFID tags found. Try scanning again.")
+                            if (errorDetails != null) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                TextButton(onClick = { setShowErrorDialog(true) }) {
+                                    Text("Show Error Details")
+                                }
+                            }
+                        }
                     } else {
                         Text("Select an asset tag to assign:")
                         state.scannedRfidTags.forEach { tag ->
@@ -287,6 +304,56 @@ fun LocationDetailScreen(
                     }
                 } else {
                     // No button while scanning
+                }
+            }
+        )
+    }
+
+    // Error Details Dialog
+    if (showErrorDialog && errorDetails != null) {
+        val (message, stackTrace) = errorDetails
+        val context = LocalContext.current
+
+        AlertDialog(
+            onDismissRequest = { setShowErrorDialog(false) },
+            title = { Text("Error Details") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Text("Error Message:", style = MaterialTheme.typography.titleSmall)
+                    Text(message, style = MaterialTheme.typography.bodyMedium)
+
+                    if (stackTrace.isNotEmpty()) {
+                        Text("Stack Trace:", style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            stackTrace,
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp)
+                                .verticalScroll(rememberScrollState())
+                                .background(
+                                    MaterialTheme.colorScheme.surfaceVariant,
+                                    RoundedCornerShape(4.dp)
+                                )
+                                .padding(8.dp)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = {
+                        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                        val clip = android.content.ClipData.newPlainText("Error Details", "Message: $message\n\nStack Trace:\n$stackTrace")
+                        clipboard.setPrimaryClip(clip)
+                    }) {
+                        Text("Copy")
+                    }
+                    TextButton(onClick = { setShowErrorDialog(false) }) {
+                        Text("Close")
+                    }
                 }
             }
         )
