@@ -69,10 +69,6 @@ import com.example.assettracking.domain.model.LocationSummary
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
 
-enum class ScanType {
-    Barcode, RFID
-}
-
 data class DashboardItem(
     val title: String,
     val subtitle: String,
@@ -92,6 +88,7 @@ fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val showQuickScanDialog = remember { mutableStateOf(false) }
+    val showRfidScanDialog = remember { mutableStateOf(false) }
     val rfidScanState by viewModel.rfidScanState.collectAsState()
     val dashboardItems = listOf(
         DashboardItem(
@@ -134,7 +131,7 @@ fun HomeScreen(
         ),
         DashboardItem(
             title = "Scan",
-            subtitle = "Quick Access",
+            subtitle = "Barcode Scan",
             icon = {
                 Icon(
                     Icons.Default.QrCodeScanner,
@@ -152,6 +149,25 @@ fun HomeScreen(
             onClick = { showQuickScanDialog.value = true }
         ),
         DashboardItem(
+            title = "RFID Scan",
+            subtitle = "Quick RFID Access",
+            icon = {
+                Icon(
+                    Icons.Default.RssFeed,
+                    contentDescription = null,
+                    modifier = Modifier.size(32.dp),
+                    tint = Color.White
+                )
+            },
+            gradient = Brush.verticalGradient(
+                colors = listOf(
+                    Color(0xFF7C3AED),
+                    Color(0xFF8B5CF6)
+                )
+            ),
+            onClick = { showRfidScanDialog.value = true }
+        ),
+        DashboardItem(
             title = "Analytics",
             subtitle = "Reports & Insights",
             icon = {
@@ -164,8 +180,8 @@ fun HomeScreen(
             },
             gradient = Brush.verticalGradient(
                 colors = listOf(
-                    Color(0xFF7C3AED),
-                    Color(0xFF8B5CF6)
+                    Color(0xFF059669),
+                    Color(0xFF10B981)
                 )
             ),
             onClick = { /* TODO: Implement analytics */ }
@@ -324,6 +340,26 @@ fun HomeScreen(
             }
         }
     }
+
+    // Quick Scan Dialog (Barcode + RFID)
+    if (showQuickScanDialog.value) {
+        QuickScanDialog(
+            rooms = rooms,
+            onDismiss = { showQuickScanDialog.value = false },
+            onScanComplete = onAssetMoved,
+            viewModel = viewModel
+        )
+    }
+
+    // RFID Only Scan Dialog
+    if (showRfidScanDialog.value) {
+        RfidScanDialog(
+            rooms = rooms,
+            onDismiss = { showRfidScanDialog.value = false },
+            onScanComplete = onAssetMoved,
+            viewModel = viewModel
+        )
+    }
 }
 
 @Composable
@@ -394,9 +430,6 @@ fun QuickScanDialog(
     val selectedRoomId = remember { mutableStateOf<Long?>(null) }
     val condition = remember { mutableStateOf("") }
     val showConditionDialog = remember { mutableStateOf(false) }
-    val scanType = remember { mutableStateOf<ScanType>(ScanType.Barcode) }
-
-    val rfidScanState by viewModel.rfidScanState.collectAsState()
 
     val context = LocalContext.current
     val scannerLauncher = rememberLauncherForActivityResult(
@@ -507,7 +540,7 @@ fun QuickScanDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Quick Scan") },
+        title = { Text("Barcode Scan") },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
@@ -515,125 +548,214 @@ fun QuickScanDialog(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Text(
-                    "Scan an asset to quickly move it to a different location",
+                    "Scan an asset barcode to quickly move it to a different location",
                     textAlign = TextAlign.Center
                 )
 
-                // Scan type selection
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                Button(
+                    onClick = {
+                        scannerLauncher.launch(scanOptions)
+                        // Don't dismiss - let condition dialog handle dismissal
+                    },
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    OutlinedButton(
-                        onClick = { scanType.value = ScanType.Barcode },
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            containerColor = if (scanType.value == ScanType.Barcode) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
-                        )
-                    ) {
-                        Icon(Icons.Default.QrCodeScanner, contentDescription = null)
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Barcode")
-                    }
-                    OutlinedButton(
-                        onClick = { scanType.value = ScanType.RFID },
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            containerColor = if (scanType.value == ScanType.RFID) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
-                        )
-                    ) {
-                        Icon(Icons.Default.RssFeed, contentDescription = null)
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("RFID")
-                    }
+                    Icon(Icons.Default.QrCodeScanner, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Start Barcode Scanning")
                 }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close")
+            }
+        }
+    )
+}
 
-                when (scanType.value) {
-                    ScanType.Barcode -> {
-                        Button(
-                            onClick = {
-                                scannerLauncher.launch(scanOptions)
-                                // Don't dismiss - let condition dialog handle dismissal
-                            },
-                            modifier = Modifier.fillMaxWidth()
+@Composable
+fun RfidScanDialog(
+    rooms: List<LocationSummary>,
+    onDismiss: () -> Unit,
+    onScanComplete: (String, Long, String) -> Unit,
+    viewModel: HomeViewModel
+) {
+    val scannedCode = remember { mutableStateOf<String?>(null) }
+    val selectedRoomId = remember { mutableStateOf<Long?>(null) }
+    val condition = remember { mutableStateOf("") }
+    val showConditionDialog = remember { mutableStateOf(false) }
+
+    val rfidScanState by viewModel.rfidScanState.collectAsState()
+
+    if (showConditionDialog.value && scannedCode.value != null) {
+        AlertDialog(
+            onDismissRequest = {
+                showConditionDialog.value = false
+                scannedCode.value = null
+                selectedRoomId.value = null
+                condition.value = ""
+            },
+            title = { Text("RFID Tag Scanned") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Text("RFID Tag: ${scannedCode.value}")
+
+                    OutlinedTextField(
+                        value = condition.value,
+                        onValueChange = { condition.value = it },
+                        label = { Text("Condition Description") },
+                        placeholder = { Text("Describe the asset's condition") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = TextFieldDefaults.outlinedTextFieldColors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                        )
+                    )
+
+                    Text(
+                        "Select destination location:",
+                        style = MaterialTheme.typography.titleSmall
+                    )
+
+                    rooms.forEach { room ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { selectedRoomId.value = room.id },
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.QrCodeScanner, contentDescription = null)
+                            RadioButton(
+                                selected = selectedRoomId.value == room.id,
+                                onClick = { selectedRoomId.value = room.id }
+                            )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Start Barcode Scanning")
+                            Column {
+                                Text(room.name, style = MaterialTheme.typography.bodyMedium)
+                                room.description?.let {
+                                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
                         }
                     }
-                    ScanType.RFID -> {
-                        when (rfidScanState) {
-                            is HomeViewModel.RfidScanState.Idle -> {
-                                Button(
-                                    onClick = { viewModel.startRfidScan() },
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Icon(Icons.Default.RssFeed, contentDescription = null)
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Start RFID Scanning")
-                                }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val roomId = selectedRoomId.value
+                        if (roomId != null) {
+                            onScanComplete(scannedCode.value!!, roomId, condition.value)
+                            showConditionDialog.value = false
+                            scannedCode.value = null
+                            selectedRoomId.value = null
+                            condition.value = ""
+                            onDismiss()
+                        }
+                    },
+                    enabled = selectedRoomId.value != null
+                ) {
+                    Text("Move Asset")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showConditionDialog.value = false
+                    scannedCode.value = null
+                    selectedRoomId.value = null
+                    condition.value = ""
+                }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Quick RFID Scan") },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    "Scan RFID tags to quickly move assets to different locations",
+                    textAlign = TextAlign.Center
+                )
+
+                when (rfidScanState) {
+                    is HomeViewModel.RfidScanState.Idle -> {
+                        Button(
+                            onClick = { viewModel.startRfidScan() },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.RssFeed, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Start RFID Scanning")
+                        }
+                    }
+                    is HomeViewModel.RfidScanState.Scanning -> {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Scanning for RFID tags...")
+                        }
+                    }
+                    is HomeViewModel.RfidScanState.Success -> {
+                        val tags = (rfidScanState as HomeViewModel.RfidScanState.Success).tags
+                        if (tags.isEmpty()) {
+                            Text("No RFID tags found. Try again.")
+                            Button(
+                                onClick = { viewModel.startRfidScan() },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Scan Again")
                             }
-                            is HomeViewModel.RfidScanState.Scanning -> {
+                        } else {
+                            Text("Select an asset tag:")
+                            tags.forEach { tag ->
                                 Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.Center,
-                                    modifier = Modifier.fillMaxWidth()
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickable {
+                                            scannedCode.value = tag
+                                            showConditionDialog.value = true
+                                            viewModel.clearRfidScan()
+                                        },
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Scanning for RFID tags...")
-                                }
-                            }
-                            is HomeViewModel.RfidScanState.Success -> {
-                                val tags = (rfidScanState as HomeViewModel.RfidScanState.Success).tags
-                                if (tags.isEmpty()) {
-                                    Text("No RFID tags found. Try again.")
-                                    Button(
-                                        onClick = { viewModel.startRfidScan() },
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Text("Scan Again")
-                                    }
-                                } else {
-                                    Text("Select an asset tag:")
-                                    tags.forEach { tag ->
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(vertical = 4.dp)
-                                                .clip(RoundedCornerShape(8.dp))
-                                                .clickable {
-                                                    scannedCode.value = tag
-                                                    showConditionDialog.value = true
-                                                    viewModel.clearRfidScan()
-                                                },
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            RadioButton(
-                                                selected = false,
-                                                onClick = {
-                                                    scannedCode.value = tag
-                                                    showConditionDialog.value = true
-                                                    viewModel.clearRfidScan()
-                                                }
-                                            )
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            Text("Tag: $tag")
+                                    RadioButton(
+                                        selected = false,
+                                        onClick = {
+                                            scannedCode.value = tag
+                                            showConditionDialog.value = true
+                                            viewModel.clearRfidScan()
                                         }
-                                    }
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Tag: $tag")
                                 }
                             }
-                            is HomeViewModel.RfidScanState.Error -> {
-                                val error = (rfidScanState as HomeViewModel.RfidScanState.Error).message
-                                Text("Scan failed: $error")
-                                Button(
-                                    onClick = { viewModel.startRfidScan() },
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text("Try Again")
-                                }
-                            }
+                        }
+                    }
+                    is HomeViewModel.RfidScanState.Error -> {
+                        val error = (rfidScanState as HomeViewModel.RfidScanState.Error).message
+                        Text("Scan failed: $error")
+                        Button(
+                            onClick = { viewModel.startRfidScan() },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Try Again")
                         }
                     }
                 }

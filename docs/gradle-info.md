@@ -127,6 +127,7 @@ android.nonTransitiveRClass=true
 - **Asset Management**: Room database for storing asset information
 - **RFID Integration**: Real Chainway C72 UHF RFID reader support
 - **Barcode Scanning**: ZXing library for QR code and barcode reading
+- **Quick RFID Scan**: Dedicated tile for fast RFID-only asset scanning
 - **Bluetooth Connectivity**: For peripheral device communication
 - **Thermal Printing**: ESCPOS-compatible receipt printing
 
@@ -134,6 +135,7 @@ android.nonTransitiveRClass=true
 - **Read Tags**: Single tag EPC reading with `inventorySingleTag()`
 - **Write Tags**: EPC data writing to UHF RFID tags
 - **Inventory Scan**: Multi-tag detection with continuous scanning
+- **Quick RFID Scan**: Dedicated tile for fast RFID-only scanning
 - **Tag Management**: Asset ID assignment and tracking
 
 ### UI Framework
@@ -225,3 +227,4 @@ Working build confirmed with successful device installation and RFID SDK integra
 - ✅ AAR file dependency properly configured
 - ✅ Hardware testing confirmed on Motorola Edge 50 Pro
 - ✅ All RFID operations (read/write/inventory) functional with real hardware
+- ✅ Demo reference files cleaned up (no longer needed)
