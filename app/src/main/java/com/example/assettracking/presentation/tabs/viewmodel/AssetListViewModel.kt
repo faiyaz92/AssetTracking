@@ -41,7 +41,7 @@ class AssetListViewModel @Inject constructor(
     fun onEvent(event: AssetListEvent) {
         when (event) {
             is AssetListEvent.CreateAsset -> createAsset(event.name, event.details, event.condition, event.baseRoomId)
-            is AssetListEvent.UpdateAsset -> updateAsset(event.id, event.name, event.details, event.condition)
+            is AssetListEvent.UpdateAsset -> updateAsset(event.id, event.name, event.details, event.condition, event.baseRoomId)
             is AssetListEvent.DeleteAsset -> deleteAsset(event.id)
             is AssetListEvent.UpdateSearch -> updateSearch(event.query)
             AssetListEvent.ClearMessage -> _uiState.update { it.copy(message = null) }
@@ -76,9 +76,9 @@ class AssetListViewModel @Inject constructor(
         }
     }
 
-    private fun updateAsset(assetId: Long, name: String, details: String?, condition: String?) {
+    private fun updateAsset(assetId: Long, name: String, details: String?, condition: String?, baseRoomId: Long?) {
         viewModelScope.launch {
-            val result = updateAssetUseCase(assetId, name, details, condition)
+            val result = updateAssetUseCase(assetId, name, details, condition, baseRoomId)
             result.onFailure { error ->
                 _uiState.update { it.copy(message = UiMessage(error.message ?: "Unable to update asset")) }
             }

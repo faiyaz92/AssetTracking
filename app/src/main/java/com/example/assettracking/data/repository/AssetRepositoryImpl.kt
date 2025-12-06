@@ -33,13 +33,15 @@ class AssetRepositoryImpl @Inject constructor(
         assetId: Long,
         name: String,
         details: String?,
-        condition: String?
+        condition: String?,
+        baseRoomId: Long?
     ): Boolean {
         val existing = assetDao.getAssetById(assetId) ?: return false
         val updated = existing.copy(
             name = name.trim(),
             details = details?.trim(),
-            condition = condition?.trim()
+            condition = condition?.trim(),
+            baseRoomId = baseRoomId
         )
         assetDao.update(updated)
         return true

@@ -301,7 +301,7 @@ fun AssetsScreen(
                 if (asset == null) {
                     viewModel.onEvent(AssetListEvent.CreateAsset(name, details, condition, baseRoomId))
                 } else {
-                    viewModel.onEvent(AssetListEvent.UpdateAsset(asset.id, name, details, condition))
+                    viewModel.onEvent(AssetListEvent.UpdateAsset(asset.id, name, details, condition, baseRoomId))
                 }
                 showAssetDialog = false
             }

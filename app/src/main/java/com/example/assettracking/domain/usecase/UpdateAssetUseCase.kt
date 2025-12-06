@@ -10,9 +10,10 @@ class UpdateAssetUseCase @Inject constructor(
         assetId: Long,
         name: String,
         details: String?,
-        condition: String?
+        condition: String?,
+        baseRoomId: Long?
     ): Result<Unit> {
-        return if (assetRepository.updateAsset(assetId, name, details, condition)) {
+        return if (assetRepository.updateAsset(assetId, name, details, condition, baseRoomId)) {
             Result.success(Unit)
         } else {
             Result.failure(IllegalArgumentException("Unable to update asset"))
