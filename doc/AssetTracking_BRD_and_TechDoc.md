@@ -38,7 +38,7 @@ The Asset Tracking Application is a mobile solution designed for Android devices
 
 #### FR-002: Asset Management
 - Users can create, edit, and delete assets.
-- Each asset has a unique code, name, optional details, base location (room), and current location.
+- Each asset has an auto-generated unique code (based on primary key), name, optional details, base location (room), and current location.
 - Assets can be assigned to rooms or remain unassigned.
 - Assets display generated barcodes.
 - Base location is set during creation (optional); current location updates on scans.
@@ -73,7 +73,7 @@ The Asset Tracking Application is a mobile solution designed for Android devices
 - Acceptance Criteria: Room name is required; description is optional.
 
 #### US-002: As a user, I want to add an asset so that I can track my inventory.
-- Acceptance Criteria: Asset code and name are required; details are optional; barcode is auto-generated.
+- Acceptance Criteria: Asset name is required; details are optional; unique code is auto-generated; barcode is auto-generated.
 
 #### US-003: As a user, I want to assign an asset to a room so that I know its location.
 - Acceptance Criteria: From room detail, scan barcode or select asset to assign.
@@ -121,8 +121,8 @@ Dependency injection via Hilt. Navigation handled by Compose Navigation.
 ### Data Model
 
 #### Entities
-- **RoomEntity**: id (Long), name (String), description (String?)
-- **AssetEntity**: id (Long), code (String), name (String), details (String?), baseRoomId (Long?), currentRoomId (Long?)
+- **LocationEntity**: id (Long), name (String), description (String?)
+- **AssetEntity**: id (Long), name (String), details (String?), condition (String?), baseRoomId (Long?), currentRoomId (Long?)
 - **AssetMovementEntity**: id (Long), assetId (Long), fromRoomId (Long?), toRoomId (Long), timestamp (Long)
 
 #### Models
@@ -222,9 +222,9 @@ Dependency injection via Hilt. Navigation handled by Compose Navigation.
 1. User taps "Assets" tile on home screen.
 2. Navigates to AssetsScreen.
 3. Taps FAB (+) to open add dialog.
-4. Enters code (required), name (required), details (optional).
-5. Saves: ViewModel calls CreateAsset use case -> Repo -> DAO insert.
-6. Barcode auto-generated and displayed.
+4. Enters name (required), details (optional).
+5. Saves: ViewModel calls CreateAsset use case -> Repo -> DAO insert (auto-generates id as code).
+6. Barcode auto-generated and displayed based on id.
 
 #### Linking Asset to Room (BRD Ref: FR-003, US-003)
 1. From RoomsScreen, tap a room to open RoomDetailScreen.
