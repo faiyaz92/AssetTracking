@@ -6,7 +6,6 @@ import com.rscja.deviceapi.RFIDWithUHFUART
 import com.rscja.deviceapi.entity.UHFTAGInfo
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import javax.inject.Inject
@@ -187,14 +186,64 @@ class C72RfidReader @Inject constructor(
 
     override suspend fun inventory(): List<String> {
         return try {
-            startInventory().first()
+            if (uhfReader == null && !initialize()) {
+                Log.e(TAG, "Reader not available for inventory - Hardware initialization failed")
+                throw RfidHardwareException.hardwareNotInitialized()
+            }
+
+            if (USE_REAL_SDK) {
+                // Perform a single inventory scan (not continuous bulk scanning)
+                val foundTags = mutableSetOf<String>()
+                val startTime = System.currentTimeMillis()
+                val duration = 3000L // 3 seconds of scanning
+
+                while (System.currentTimeMillis() - startTime < duration) {
+                    try {
+                        val tagInfo = uhfReader?.inventorySingleTag()
+                        if (tagInfo != null && !tagInfo.epc.isNullOrEmpty()) {
+                            foundTags.add(tagInfo.epc)
+                        }
+                    } catch (scanException: Exception) {
+                        Log.w(TAG, "Error during single tag scan: ${scanException.message}")
+                        // Check if it's a hardware-related error
+                        when {
+                            scanException.message?.contains("device", ignoreCase = true) == true -> {
+                                throw RfidHardwareException.hardwareNotFound()
+                            }
+                            scanException.message?.contains("timeout", ignoreCase = true) == true -> {
+                                throw RfidHardwareException.scanTimeout()
+                            }
+                            else -> {
+                                // Continue scanning despite individual scan errors
+                            }
+                        }
+                    }
+                    delay(100) // Small delay between scans
+                }
+
+                val assetIds = foundTags.toList()
+                Log.d(TAG, "Single inventory scan found ${assetIds.size} tags: $assetIds")
+                assetIds
+            } else {
+                // Mock single inventory
+                Log.d(TAG, "Mock single inventory scan")
+                delay(1000)
+                listOf("000001", "000002", "000003")
+            }
         } catch (e: RfidHardwareException) {
             // Re-throw hardware-specific exceptions
             throw e
         } catch (e: Exception) {
-            Log.e(TAG, "Inventory failed: ${e.message}", e)
-            // Convert to hardware exception for consistency
-            throw RfidHardwareException.unknownError(e.message)
+            Log.e(TAG, "Single inventory scan failed: ${e.message}", e)
+            // Convert to appropriate hardware exception
+            when {
+                e.message?.contains("timeout", ignoreCase = true) == true -> {
+                    throw RfidHardwareException.scanTimeout()
+                }
+                else -> {
+                    throw RfidHardwareException.unknownError(e.message)
+                }
+            }
         }
     }
 
