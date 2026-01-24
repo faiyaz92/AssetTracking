@@ -3,11 +3,15 @@ package com.example.assettracking.util
 import android.content.Context
 import android.util.Log
 import com.rscja.deviceapi.RFIDWithUHFUART
+import com.rscja.deviceapi.entity.InventoryParameter
 import com.rscja.deviceapi.entity.UHFTAGInfo
+import com.rscja.deviceapi.interfaces.IUHFInventoryCallback
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -36,12 +40,6 @@ class RfidHardwareException(message: String, cause: Throwable? = null) : Excepti
     }
 }
 
-/**
- * Chainway C72 UHF RFID Reader utility class
- * Handles UHF RFID operations for asset tracking
- *
- * Uses the actual Chainway RFID SDK
- */
 @Singleton
 class C72RfidReader @Inject constructor(
     @ApplicationContext private val context: Context
@@ -54,11 +52,12 @@ class C72RfidReader @Inject constructor(
     override fun initialize(): Boolean {
         return try {
             if (USE_REAL_SDK) {
-                // Real SDK implementation
+                // Real SDK implementation - matching demo pattern
                 if (uhfReader == null) {
                     uhfReader = RFIDWithUHFUART.getInstance()
                 }
-                // Note: init() is asynchronous in the demo, but for simplicity we'll assume it succeeds
+                // Initialize the reader - in demo this is done in AsyncTask
+                // We'll do it synchronously here for simplicity
                 val result = uhfReader?.init(context) ?: false
                 if (result) {
                     Log.d(TAG, "UHF Reader initialized successfully")
@@ -98,235 +97,324 @@ class C72RfidReader @Inject constructor(
         }
     }
 
-    override fun readTag(): String? {
+    override suspend fun readTag(): String? {
         return try {
-            if (uhfReader == null && !initialize()) {
-                Log.e(TAG, "Reader not available")
-                return null
-            }
-
             if (USE_REAL_SDK) {
-                // Real SDK - use inventorySingleTag to read a tag
-                val tagInfo = uhfReader?.inventorySingleTag()
-                if (tagInfo != null && !tagInfo.epc.isNullOrEmpty()) {
-                    Log.d(TAG, "Tag read successfully: ${tagInfo.epc}")
-                    tagInfo.epc
+                // Real SDK - use inventorySingleTag to read a tag (matching demo)
+                val tagInfo = withContext(Dispatchers.IO) {
+                    uhfReader?.inventorySingleTag()
+                }
+                if (tagInfo != null && tagInfo.epc != null) {
+                    val assetId = tagInfo.epc
+                    Log.d(TAG, "Read tag successfully: $assetId")
+                    assetId
                 } else {
                     Log.d(TAG, "No tag found")
                     null
                 }
             } else {
-                // Mock
-                Log.d(TAG, "Mock tag read - returning test asset ID")
-                "000001"
+                // Mock implementation
+                Log.d(TAG, "Mock readTag - no tag found")
+                null
             }
-        } catch (e: RfidHardwareException) {
-            throw e
         } catch (e: Exception) {
-            Log.e(TAG, "Error reading tag", e)
+            Log.e(TAG, "Error reading tag: ${e.message}", e)
             throw RfidHardwareException.unknownError(e.message)
         }
     }
 
     override fun writeTag(assetId: String): Boolean {
         return try {
-            if (uhfReader == null && !initialize()) {
-                Log.e(TAG, "Reader not available for writing")
-                return false
-            }
-
             if (USE_REAL_SDK) {
-                // Real SDK - write to EPC bank (bank 1)
-                // Convert assetId to hex if needed, assuming it's already in correct format
-                val hexData = assetId // Assuming assetId is already hex or will be converted
-                val result = uhfReader?.writeData("00000000", RFIDWithUHFUART.Bank_EPC, 2, hexData.length / 4, hexData) ?: false
+                // Real SDK implementation - write to EPC bank (bank 1)
+                // Based on demo: writeData(password, bank, ptr, len, data)
+                val result = uhfReader?.writeData("00000000",  // No password
+                    RFIDWithUHFUART.Bank_EPC,  // Write to EPC bank
+                    2,  // Start at word 2 (after PC and EPC length)
+                    assetId.length / 4,  // Length in words (4 hex chars = 1 word)
+                    assetId  // The asset ID data
+                ) ?: false
                 if (result) {
-                    Log.d(TAG, "Tag write successful for asset ID: $assetId")
+                    Log.d(TAG, "Write tag successfully: $assetId")
                     true
                 } else {
-                    Log.e(TAG, "Tag write failed")
+                    Log.e(TAG, "Failed to write tag")
                     false
                 }
             } else {
-                // Mock
-                Log.d(TAG, "Mock tag write successful for asset ID: $assetId")
+                // Mock implementation
+                Log.d(TAG, "Mock writeTag successful: $assetId")
                 true
             }
-        } catch (e: RfidHardwareException) {
-            throw e
         } catch (e: Exception) {
-            Log.e(TAG, "Error writing tag", e)
+            Log.e(TAG, "Error writing tag: ${e.message}", e)
             throw RfidHardwareException.unknownError(e.message)
         }
     }
 
     override fun killTag(password: String): Boolean {
         return try {
-            if (uhfReader == null && !initialize()) {
-                Log.e(TAG, "Reader not available for killing tag")
-                return false
-            }
-
             if (USE_REAL_SDK) {
-                // Real SDK - kill tag functionality
-                // Note: Kill functionality may require specific implementation
-                // For now, return false as kill is not commonly used
-                Log.w(TAG, "Kill tag functionality not implemented in current SDK version")
-                false
+                // Real SDK implementation - kill tag
+                val result = uhfReader?.killTag(password) ?: false
+                if (result) {
+                    Log.d(TAG, "Kill tag successfully")
+                    true
+                } else {
+                    Log.e(TAG, "Failed to kill tag")
+                    false
+                }
             } else {
-                // Mock
-                Log.d(TAG, "Mock tag kill successful")
+                // Mock implementation
+                Log.d(TAG, "Mock killTag successful")
                 true
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error killing tag", e)
-            false
-        }
-    }
-
-    override suspend fun inventory(): List<String> {
-        return try {
-            if (uhfReader == null && !initialize()) {
-                Log.e(TAG, "Reader not available for inventory - Hardware initialization failed")
-                throw RfidHardwareException.hardwareNotInitialized()
-            }
-
-            if (USE_REAL_SDK) {
-                // Perform a single inventory scan (not continuous bulk scanning)
-                val foundTags = mutableSetOf<String>()
-                val startTime = System.currentTimeMillis()
-                val duration = 3000L // 3 seconds of scanning
-
-                while (System.currentTimeMillis() - startTime < duration) {
-                    try {
-                        val tagInfo = uhfReader?.inventorySingleTag()
-                        if (tagInfo != null && !tagInfo.epc.isNullOrEmpty()) {
-                            foundTags.add(tagInfo.epc)
-                        }
-                    } catch (scanException: Exception) {
-                        Log.w(TAG, "Error during single tag scan: ${scanException.message}")
-                        // Check if it's a hardware-related error
-                        when {
-                            scanException.message?.contains("device", ignoreCase = true) == true -> {
-                                throw RfidHardwareException.hardwareNotFound()
-                            }
-                            scanException.message?.contains("timeout", ignoreCase = true) == true -> {
-                                throw RfidHardwareException.scanTimeout()
-                            }
-                            else -> {
-                                // Continue scanning despite individual scan errors
-                            }
-                        }
-                    }
-                    delay(100) // Small delay between scans
-                }
-
-                val assetIds = foundTags.toList()
-                Log.d(TAG, "Single inventory scan found ${assetIds.size} tags: $assetIds")
-                assetIds
-            } else {
-                // Mock single inventory
-                Log.d(TAG, "Mock single inventory scan")
-                delay(1000)
-                listOf("000001", "000002", "000003")
-            }
-        } catch (e: RfidHardwareException) {
-            // Re-throw hardware-specific exceptions
-            throw e
-        } catch (e: Exception) {
-            Log.e(TAG, "Single inventory scan failed: ${e.message}", e)
-            // Convert to appropriate hardware exception
-            when {
-                e.message?.contains("timeout", ignoreCase = true) == true -> {
-                    throw RfidHardwareException.scanTimeout()
-                }
-                else -> {
-                    throw RfidHardwareException.unknownError(e.message)
-                }
-            }
+            Log.e(TAG, "Error killing tag: ${e.message}", e)
+            throw RfidHardwareException.unknownError(e.message)
         }
     }
 
     override fun startInventory(): Flow<List<String>> = flow {
         try {
-            if (uhfReader == null && !initialize()) {
-                Log.e(TAG, "Reader not available for inventory - Hardware initialization failed")
-                throw RfidHardwareException.hardwareNotInitialized()
-            }
-
             if (USE_REAL_SDK) {
-                // Real SDK - perform multiple single inventories to simulate continuous scanning
+                // Real SDK implementation - start continuous inventory
+                uhfReader?.startInventoryTag() ?: run {
+                    Log.e(TAG, "Failed to start inventory - reader not initialized")
+                    emit(emptyList())
+                    return@flow
+                }
+
+                // Collect tags for a short period
                 val foundTags = mutableSetOf<String>()
                 val startTime = System.currentTimeMillis()
-                val duration = 3000L // 3 seconds of scanning
+                val durationMs = 2000L // 2 seconds
 
-                while (System.currentTimeMillis() - startTime < duration) {
+                while (System.currentTimeMillis() - startTime < durationMs) {
                     try {
                         val tagInfo = uhfReader?.inventorySingleTag()
-                        if (tagInfo != null && !tagInfo.epc.isNullOrEmpty()) {
+                        if (tagInfo != null && tagInfo.epc != null) {
                             foundTags.add(tagInfo.epc)
+                            emit(foundTags.toList())
                         }
-                    } catch (scanException: Exception) {
-                        Log.w(TAG, "Error during single tag scan: ${scanException.message}")
-                        // Check if it's a hardware-related error
-                        when {
-                            scanException.message?.contains("device", ignoreCase = true) == true -> {
-                                throw RfidHardwareException.hardwareNotFound()
-                            }
-                            scanException.message?.contains("timeout", ignoreCase = true) == true -> {
-                                throw RfidHardwareException.scanTimeout()
-                            }
-                            else -> {
-                                // Continue scanning despite individual scan errors
-                            }
-                        }
+                        delay(100) // Small delay between scans
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error during inventory scan: ${e.message}", e)
+                        break
                     }
-                    delay(100) // Small delay between scans
                 }
 
-                val assetIds = foundTags.toList()
-                Log.d(TAG, "Found ${assetIds.size} tags: $assetIds")
-                emit(assetIds)
+                // Stop inventory
+                uhfReader?.stopInventory()
+
+                Log.d(TAG, "Inventory completed, found ${foundTags.size} unique tags")
             } else {
-                // Mock
-                Log.d(TAG, "Mock inventory started")
-                delay(1000)
-                emit(listOf("000001", "000002", "000003"))
+                // Mock implementation
+                Log.d(TAG, "Mock startInventory")
+                emit(listOf("MOCK001", "MOCK002"))
             }
-        } catch (e: RfidHardwareException) {
-            // Re-throw hardware-specific exceptions
-            throw e
         } catch (e: Exception) {
-            Log.e(TAG, "Critical error during inventory scan: ${e.message}", e)
-            // Convert to appropriate hardware exception
-            when {
-                e.message?.contains("timeout", ignoreCase = true) == true -> {
-                    throw RfidHardwareException.scanTimeout()
-                }
-                else -> {
-                    throw RfidHardwareException.unknownError(e.message)
-                }
-            }
+            Log.e(TAG, "Error in startInventory: ${e.message}", e)
+            emit(emptyList())
         }
     }
 
-    override fun close() {
+    override suspend fun inventory(): List<String> {
+        return try {
+            if (USE_REAL_SDK) {
+                Log.e(TAG, "Reader not available for inventory - Hardware initialization failed")
+                // Real SDK implementation
+                val foundTags = mutableListOf<String>()
+                
+                // Perform a single inventory scan (not continuous bulk scanning)
+                val startTime = System.currentTimeMillis()
+                val scanDuration = 3000L // 3 seconds
+                
+                while (System.currentTimeMillis() - startTime < scanDuration) {
+                    try {
+                        val tagInfo = withContext(Dispatchers.IO) {
+                            uhfReader?.inventorySingleTag()
+                        }
+                        if (tagInfo != null && tagInfo.epc != null && !foundTags.contains(tagInfo.epc)) {
+                            foundTags.add(tagInfo.epc)
+                            Log.d(TAG, "Found tag during inventory: ${tagInfo.epc}")
+                        }
+                        delay(200) // Delay between individual scans
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error during inventory scan iteration: ${e.message}", e)
+                        break
+                    }
+                }
+                
+                Log.d(TAG, "Single inventory scan found ${foundTags.size} tags: $foundTags")
+                foundTags
+            } else {
+                // Mock single inventory
+                Log.d(TAG, "Mock single inventory scan")
+                listOf("MOCK001", "MOCK002", "MOCK003")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in inventory: ${e.message}", e)
+            emptyList()
+        }
+    }
+
+    override suspend fun singleInventory(): String? {
+        return try {
+            if (USE_REAL_SDK) {
+                Log.e(TAG, "Reader not available for single inventory - Hardware initialization failed")
+                // Real SDK implementation
+                val tagInfo = withContext(Dispatchers.IO) {
+                    uhfReader?.inventorySingleTag()
+                }
+                if (tagInfo != null && tagInfo.epc != null) {
+                    val assetId = tagInfo.epc
+                    Log.d(TAG, "Single inventory found tag: $assetId")
+                    assetId
+                } else {
+                    Log.d(TAG, "Single inventory - no tag found")
+                    null
+                }
+            } else {
+                // Mock single inventory
+                Log.d(TAG, "Mock single inventory scan")
+                "MOCK001"
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in single inventory: ${e.message}", e)
+            null
+        }
+    }
+
+    override suspend fun bulkInventory(onTagFound: (String) -> Unit, durationMs: Long) {
         try {
             if (USE_REAL_SDK) {
-                uhfReader?.free()
+                Log.e(TAG, "Reader not available for bulk inventory - Hardware initialization failed")
+                // Real SDK implementation with callback
+                uhfReader?.setInventoryCallback(object : IUHFInventoryCallback {
+                    override fun callback(tagInfo: UHFTAGInfo) {
+                        if (tagInfo.epc != null) {
+                            Log.d(TAG, "Bulk inventory found tag: ${tagInfo.epc}")
+                            onTagFound(tagInfo.epc)
+                        }
+                    }
+                })
+
+                // Start bulk inventory
+                val inventoryParam = InventoryParameter()
+                withContext(Dispatchers.IO) {
+                    uhfReader?.startInventoryTag(inventoryParam)
+                }
+
+                // Wait for the specified duration
+                delay(durationMs)
+
+                // Stop bulk inventory
+                withContext(Dispatchers.IO) {
+                    uhfReader?.stopInventory()
+                }
+                Log.d(TAG, "Bulk inventory completed")
+            } else {
+                // Mock bulk inventory
+                Log.d(TAG, "Mock bulk inventory started")
+                val mockTags = listOf("MOCK001", "MOCK002", "MOCK003")
+                for (tag in mockTags) {
+                    delay(500) // Simulate finding tags over time
+                    onTagFound(tag)
+                }
+                Log.d(TAG, "Mock bulk inventory completed")
             }
-            uhfReader = null
-            Log.d(TAG, "UHF Reader closed")
         } catch (e: Exception) {
-            Log.e(TAG, "Error closing reader", e)
+            Log.e(TAG, "Error in bulk inventory: ${e.message}", e)
+        }
+    }
+
+    override fun stopBulkInventory(): Boolean {
+        return try {
+            if (USE_REAL_SDK) {
+                // Real SDK implementation
+                val result = uhfReader?.stopInventory() ?: false
+                if (result) {
+                    Log.d(TAG, "Bulk inventory stopped successfully")
+                    true
+                } else {
+                    Log.e(TAG, "Failed to stop bulk inventory")
+                    false
+                }
+            } else {
+                // Mock implementation
+                Log.d(TAG, "Mock bulk inventory stopped")
+                true
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error stopping bulk inventory: ${e.message}", e)
+            false
+        }
+    }
+
+    override suspend fun close() {
+        try {
+            if (USE_REAL_SDK) {
+                // Real SDK implementation
+                withContext(Dispatchers.IO) {
+                    uhfReader?.free()
+                }
+                uhfReader = null
+                Log.d(TAG, "UHF Reader closed successfully")
+            } else {
+                // Mock implementation
+                Log.d(TAG, "Mock UHF Reader closed")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error closing UHF Reader: ${e.message}", e)
         }
     }
 
     override fun isAvailable(): Boolean {
         return try {
-            uhfReader != null || initialize()
+            if (USE_REAL_SDK) {
+                // Real SDK implementation - check if reader is available
+                // TODO: Check correct method name in Chainway SDK
+                uhfReader != null // Placeholder check
+            } else {
+                // Mock implementation
+                true
+            }
         } catch (e: Exception) {
+            Log.e(TAG, "Error checking reader availability: ${e.message}", e)
             false
         }
+    }
+
+    // Public wrapper methods for direct SDK access (used by demo screens)
+    fun setInventoryCallback(callback: IUHFInventoryCallback?) {
+        uhfReader?.setInventoryCallback(callback)
+    }
+
+    fun startInventoryTag(): Boolean {
+        return uhfReader?.startInventoryTag() ?: false
+    }
+
+    fun stopInventory(): Boolean {
+        return uhfReader?.stopInventory() ?: false
+    }
+
+    fun readData(
+        epcData: String?,
+        memBank: Int,
+        address: Int,
+        wordCount: Int
+    ): String? {
+        return uhfReader?.readData(epcData, memBank, address, wordCount)
+    }
+
+    fun writeData(
+        epcData: String?,
+        memBank: Int,
+        address: Int,
+        wordCount: Int,
+        data: String?
+    ): Boolean {
+        return uhfReader?.writeData(epcData, memBank, address, wordCount, data) ?: false
     }
 }

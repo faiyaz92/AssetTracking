@@ -10,5 +10,11 @@ data class LocationSummaryTuple(
     @ColumnInfo(name = "roomDescription")
     val roomDescription: String?,
     @ColumnInfo(name = "assetCount")
-    val assetCount: Int
+    val assetCount: Int,
+    @ColumnInfo(name = "parentId")
+    val parentId: Long?,
+    @ColumnInfo(name = "hasChildren")
+    val hasChildren: Boolean,
+    @ColumnInfo(name = "locationCode")
+    val locationCode: String
 )

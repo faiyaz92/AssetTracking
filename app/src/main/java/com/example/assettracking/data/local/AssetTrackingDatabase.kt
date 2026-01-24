@@ -13,7 +13,7 @@ import com.example.assettracking.data.local.entity.LocationEntity
 
 @Database(
     entities = [LocationEntity::class, AssetEntity::class, AssetMovementEntity::class],
-    version = 2,
+    version = 4,
     exportSchema = false
 )
 abstract class AssetTrackingDatabase : RoomDatabase() {
@@ -26,6 +26,22 @@ abstract class AssetTrackingDatabase : RoomDatabase() {
             override fun migrate(database: SupportSQLiteDatabase) {
                 // Rename table from rooms to locations
                 database.execSQL("ALTER TABLE rooms RENAME TO locations")
+            }
+        }
+
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // Add locationCode column to locations table
+                database.execSQL("ALTER TABLE locations ADD COLUMN locationCode TEXT NOT NULL DEFAULT ''")
+                // Generate location codes for existing locations
+                // This will be handled by the application logic when locations are accessed
+            }
+        }
+
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // Add parentId column to locations table
+                database.execSQL("ALTER TABLE locations ADD COLUMN parentId INTEGER")
             }
         }
     }

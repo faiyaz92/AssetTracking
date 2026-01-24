@@ -18,6 +18,9 @@ class HomeViewModel @Inject constructor(
     private val _rfidScanState = MutableStateFlow<RfidScanState>(RfidScanState.Idle)
     val rfidScanState = _rfidScanState.asStateFlow()
 
+    private val _radarScanState = MutableStateFlow<RadarScanState>(RadarScanState.Idle)
+    val radarScanState = _radarScanState.asStateFlow()
+
     fun startRfidScan() {
         _rfidScanState.value = RfidScanState.Scanning
         viewModelScope.launch {
@@ -48,10 +51,78 @@ class HomeViewModel @Inject constructor(
         _rfidScanState.value = RfidScanState.Idle
     }
 
+    // Radar scanning - continuous detection like UHFReadTagFragment
+    fun startRadarScan() {
+        _radarScanState.value = RadarScanState.Scanning(emptyList(), 0)
+        viewModelScope.launch {
+            try {
+                val detectedTags = mutableMapOf<String, TagInfo>()
+                var totalCount = 0
+                
+                rfidReader.bulkInventory(
+                    onTagFound = { epc ->
+                        totalCount++
+                        val existing = detectedTags[epc]
+                        if (existing != null) {
+                            // Tag seen again - increment count
+                            detectedTags[epc] = existing.copy(count = existing.count + 1)
+                        } else {
+                            // New tag
+                            detectedTags[epc] = TagInfo(epc = epc, count = 1)
+                        }
+                        // Update UI with current state
+                        _radarScanState.value = RadarScanState.Scanning(
+                            tags = detectedTags.values.toList(),
+                            totalCount = totalCount
+                        )
+                    },
+                    durationMs = 10000L // 10 seconds continuous scan
+                )
+                
+                // Scan complete
+                _radarScanState.value = RadarScanState.Complete(
+                    tags = detectedTags.values.toList(),
+                    totalCount = totalCount
+                )
+            } catch (e: RfidHardwareException) {
+                val errorMessage = when {
+                    e.message?.contains("not found") == true -> "RFID hardware not detected."
+                    e.message?.contains("not initialized") == true -> "RFID hardware failed to initialize."
+                    e.message?.contains("permission") == true -> "Permission denied for RFID access."
+                    e.message?.contains("connection") == true -> "Failed to connect to RFID module."
+                    else -> e.message ?: "RFID radar scan failed."
+                }
+                val stackTrace = android.util.Log.getStackTraceString(e)
+                _radarScanState.value = RadarScanState.Error(errorMessage, stackTrace)
+            } catch (e: Exception) {
+                val errorMessage = "Unexpected error during radar scan: ${e.message}"
+                val stackTrace = android.util.Log.getStackTraceString(e)
+                _radarScanState.value = RadarScanState.Error(errorMessage, stackTrace)
+            }
+        }
+    }
+
+    fun clearRadarScan() {
+        _radarScanState.value = RadarScanState.Idle
+    }
+
+    data class TagInfo(
+        val epc: String,
+        val count: Int = 1,
+        val rssi: String? = null
+    )
+
     sealed class RfidScanState {
         object Idle : RfidScanState()
         object Scanning : RfidScanState()
         data class Success(val tags: List<String>) : RfidScanState()
         data class Error(val message: String, val stackTrace: String = "") : RfidScanState()
+    }
+
+    sealed class RadarScanState {
+        object Idle : RadarScanState()
+        data class Scanning(val tags: List<TagInfo>, val totalCount: Int) : RadarScanState()
+        data class Complete(val tags: List<TagInfo>, val totalCount: Int) : RadarScanState()
+        data class Error(val message: String, val stackTrace: String = "") : RadarScanState()
     }
 }

@@ -4,6 +4,7 @@ package com.example.assettracking.presentation.assets
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,21 +19,28 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -68,6 +76,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.platform.LocalContext
@@ -92,11 +101,13 @@ import com.example.assettracking.presentation.tabs.viewmodel.AssetListViewModel
 import com.example.assettracking.util.C72RfidReader
 import com.example.assettracking.util.printBarcode
 import com.example.assettracking.util.rememberBarcodeImage
+import java.util.ArrayDeque
 import com.example.assettracking.util.RfidHardwareException
 
 @Composable
 fun AssetsScreen(
     onBack: () -> Unit,
+    onAssetClick: (Long) -> Unit = {},
     viewModel: AssetListViewModel = hiltViewModel(),
     c72RfidReader: C72RfidReader = C72RfidReader(LocalContext.current)
 ) {
@@ -130,6 +141,11 @@ fun AssetsScreen(
 
     // Permission handling for Bluetooth printing
     var pendingPrintAsset by remember { mutableStateOf<AssetSummary?>(null) }
+
+    // Location filter dialog state
+    var showCurrentLocationDialog by remember { mutableStateOf(false) }
+    var showBaseLocationDialog by remember { mutableStateOf(false) }
+    var locationSearchQuery by remember { mutableStateOf("") }
 
     val bluetoothPermissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         arrayOf(
@@ -239,6 +255,56 @@ fun AssetsScreen(
                 singleLine = true,
                 shape = RoundedCornerShape(12.dp)
             )
+
+            // Location Filters with Dialogs
+            if (state.rooms.isNotEmpty()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Current Location Filter
+                    Box(modifier = Modifier.weight(1f).clickable { showCurrentLocationDialog = true }) {
+                        OutlinedTextField(
+                            value = state.rooms.find { it.id == state.currentLocationFilter }?.name ?: "All Current Locations",
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Current Location") },
+                            trailingIcon = {
+                                Icon(
+                                    Icons.Default.Search,
+                                    contentDescription = "Search locations",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp),
+                            enabled = false
+                        )
+                    }
+
+                    // Base Location Filter
+                    Box(modifier = Modifier.weight(1f).clickable { showBaseLocationDialog = true }) {
+                        OutlinedTextField(
+                            value = state.rooms.find { it.id == state.baseLocationFilter }?.name ?: "All Base Locations",
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Base Location") },
+                            trailingIcon = {
+                                Icon(
+                                    Icons.Default.Search,
+                                    contentDescription = "Search locations",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp),
+                            enabled = false
+                        )
+                    }
+                }
+            }
             when {
                 state.isLoading -> LoadingState(Modifier.fillMaxSize())
                 state.filteredAssets.isEmpty() -> EmptyState(
@@ -249,42 +315,83 @@ fun AssetsScreen(
                         "No assets found for '${state.searchQuery}'."
                     }
                 )
-                else -> LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(state.filteredAssets, key = { it.id }) { asset ->
-                        AssetCard(
-                            asset = asset,
-                            onEdit = {
-                                editingAsset = asset
-                                showAssetDialog = true
-                            },
-                            onDelete = {
-                                assetToDelete = asset
-                                showDeleteDialog = true
-                            },
-                            onPrint = {
-                                val allGranted = bluetoothPermissions.all { permission ->
-                                    ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+                else -> {
+                    // Normal list display
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(state.filteredAssets, key = { it.id }) { asset ->
+                            AssetCard(
+                                asset = asset,
+                                onClick = { onAssetClick(asset.id) },
+                                onEdit = {
+                                    editingAsset = asset
+                                    showAssetDialog = true
+                                },
+                                onDelete = {
+                                    assetToDelete = asset
+                                    showDeleteDialog = true
+                                },
+                                onPrint = {
+                                    val allGranted = bluetoothPermissions.all { permission ->
+                                        ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+                                    }
+                                    if (allGranted) {
+                                        printBarcode(context, asset.id.toString().padStart(6, '0'), asset.name)
+                                    } else {
+                                        pendingPrintAsset = asset
+                                        permissionLauncher.launch(bluetoothPermissions)
+                                    }
+                                },
+                                onRfidWrite = {
+                                    rfidAssetToWrite = asset
+                                    showRfidDialog = true
                                 }
-                                if (allGranted) {
-                                    printBarcode(context, asset.id.toString().padStart(6, '0'), asset.name)
-                                } else {
-                                    pendingPrintAsset = asset
-                                    permissionLauncher.launch(bluetoothPermissions)
-                                }
-                            },
-                            onRfidWrite = {
-                                rfidAssetToWrite = asset
-                                showRfidDialog = true
-                            }
-                        )
+                            )
+                        }
                     }
                 }
             }
         }
+    }
+
+    // Location Filter Dialogs
+    if (showCurrentLocationDialog) {
+        LocationFilterDialog(
+            title = "Select Current Location",
+            locations = state.rooms,
+            searchQuery = locationSearchQuery,
+            onSearchQueryChange = { locationSearchQuery = it },
+            onLocationSelected = { locationId ->
+                viewModel.onEvent(AssetListEvent.FilterByCurrentLocation(locationId))
+                showCurrentLocationDialog = false
+                locationSearchQuery = ""
+            },
+            onDismiss = {
+                showCurrentLocationDialog = false
+                locationSearchQuery = ""
+            }
+        )
+    }
+
+    if (showBaseLocationDialog) {
+        LocationFilterDialog(
+            title = "Select Base Location",
+            locations = state.rooms,
+            searchQuery = locationSearchQuery,
+            onSearchQueryChange = { locationSearchQuery = it },
+            onLocationSelected = { locationId ->
+                viewModel.onEvent(AssetListEvent.FilterByBaseLocation(locationId))
+                showBaseLocationDialog = false
+                locationSearchQuery = ""
+            },
+            onDismiss = {
+                showBaseLocationDialog = false
+                locationSearchQuery = ""
+            }
+        )
     }
 
     if (showAssetDialog) {
@@ -359,56 +466,50 @@ fun AssetsScreen(
             },
             confirmButton = {
                 Button(onClick = {
-                    // Read existing tag data first
-                    try {
-                        val existingData = c72RfidReader.readTag()
-                        existingRfidData = existingData
+                    coroutineScope.launch {
+                        // Read existing tag data first
+                        try {
+                            val existingData = c72RfidReader.readTag()
+                            existingRfidData = existingData
 
-                        if (existingData != null) {
-                            // Tag has data - show confirmation dialog
-                            showRfidDialog = false
-                            showRfidConfirmDialog = true
-                        } else {
-                            // Tag is blank - write directly
-                            val success = c72RfidReader.writeTag(rfidAssetToWrite!!.id.toString().padStart(6, '0'))
-                            if (success) {
-                                coroutineScope.launch {
-                                    snackbarHostState.showSnackbar("RFID tag written successfully")
-                                }
+                            if (existingData != null) {
+                                // Tag has data - show confirmation dialog
+                                showRfidDialog = false
+                                showRfidConfirmDialog = true
                             } else {
-                                coroutineScope.launch {
+                                // Tag is blank - write directly
+                                val success = c72RfidReader.writeTag(rfidAssetToWrite!!.id.toString().padStart(6, '0'))
+                                if (success) {
+                                    snackbarHostState.showSnackbar("RFID tag written successfully")
+                                } else {
                                     snackbarHostState.showSnackbar("Failed to write RFID tag")
                                 }
+                                showRfidDialog = false
+                                rfidAssetToWrite = null
                             }
+                        } catch (e: RfidHardwareException) {
+                            val errorMessage = when {
+                                e.message?.contains("not found") == true -> "RFID hardware not detected. Please ensure you're using a device with RFID capabilities."
+                                e.message?.contains("not initialized") == true -> "RFID hardware failed to initialize. Check device connections and try again."
+                                e.message?.contains("permission") == true -> "Permission denied for RFID access. Please grant necessary permissions."
+                                e.message?.contains("connection") == true -> "Failed to connect to RFID module. Check hardware connections."
+                                else -> e.message ?: "RFID hardware error occurred."
+                            }
+                            val stackTrace = android.util.Log.getStackTraceString(e)
+                            errorDetails = Pair(errorMessage, stackTrace)
+                            showErrorDialog = true
+                            snackbarHostState.showSnackbar(errorMessage)
+                            showRfidDialog = false
+                            rfidAssetToWrite = null
+                        } catch (e: Exception) {
+                            val errorMessage = "Unexpected error: ${e.message}"
+                            val stackTrace = android.util.Log.getStackTraceString(e)
+                            errorDetails = Pair(errorMessage, stackTrace)
+                            showErrorDialog = true
+                            snackbarHostState.showSnackbar(errorMessage)
                             showRfidDialog = false
                             rfidAssetToWrite = null
                         }
-                    } catch (e: RfidHardwareException) {
-                        val errorMessage = when {
-                            e.message?.contains("not found") == true -> "RFID hardware not detected. Please ensure you're using a device with RFID capabilities."
-                            e.message?.contains("not initialized") == true -> "RFID hardware failed to initialize. Check device connections and try again."
-                            e.message?.contains("permission") == true -> "Permission denied for RFID access. Please grant necessary permissions."
-                            e.message?.contains("connection") == true -> "Failed to connect to RFID module. Check hardware connections."
-                            else -> e.message ?: "RFID hardware error occurred."
-                        }
-                        val stackTrace = android.util.Log.getStackTraceString(e)
-                        errorDetails = Pair(errorMessage, stackTrace)
-                        showErrorDialog = true
-                        coroutineScope.launch {
-                            snackbarHostState.showSnackbar(errorMessage)
-                        }
-                        showRfidDialog = false
-                        rfidAssetToWrite = null
-                    } catch (e: Exception) {
-                        val errorMessage = "Unexpected error: ${e.message}"
-                        val stackTrace = android.util.Log.getStackTraceString(e)
-                        errorDetails = Pair(errorMessage, stackTrace)
-                        showErrorDialog = true
-                        coroutineScope.launch {
-                            snackbarHostState.showSnackbar(errorMessage)
-                        }
-                        showRfidDialog = false
-                        rfidAssetToWrite = null
                     }
                 }) {
                     Text("Write Tag")
@@ -461,51 +562,40 @@ fun AssetsScreen(
             confirmButton = {
                 if (!isAssetId) {
                     Button(onClick = {
-                        try {
-                            // Kill existing data and write new data
-                            val killed = c72RfidReader.killTag("00000000") // Default password
-                            if (killed) {
+                        coroutineScope.launch {
+                            try {
+                                // Write directly to overwrite existing data (matching demo pattern)
+                                // No need to kill tag - writeData overwrites automatically
                                 val success = c72RfidReader.writeTag(rfidAssetToWrite!!.id.toString().padStart(6, '0'))
                                 if (success) {
-                                    coroutineScope.launch {
-                                        snackbarHostState.showSnackbar("RFID tag overwritten successfully")
-                                    }
+                                    snackbarHostState.showSnackbar("RFID tag overwritten successfully")
                                 } else {
-                                    coroutineScope.launch {
-                                        snackbarHostState.showSnackbar("Failed to write RFID tag")
-                                    }
+                                    snackbarHostState.showSnackbar("Failed to write RFID tag")
                                 }
-                            } else {
-                                coroutineScope.launch {
-                                    snackbarHostState.showSnackbar("Failed to clear existing RFID data")
+                            } catch (e: RfidHardwareException) {
+                                val errorMessage = when {
+                                    e.message?.contains("not found") == true -> "RFID hardware not detected. Please ensure you're using a device with RFID capabilities."
+                                    e.message?.contains("not initialized") == true -> "RFID hardware failed to initialize. Check device connections and try again."
+                                    e.message?.contains("permission") == true -> "Permission denied for RFID access. Please grant necessary permissions."
+                                    e.message?.contains("connection") == true -> "Failed to connect to RFID module. Check hardware connections."
+                                    else -> e.message ?: "RFID hardware error occurred."
                                 }
-                            }
-                        } catch (e: RfidHardwareException) {
-                            val errorMessage = when {
-                                e.message?.contains("not found") == true -> "RFID hardware not detected. Please ensure you're using a device with RFID capabilities."
-                                e.message?.contains("not initialized") == true -> "RFID hardware failed to initialize. Check device connections and try again."
-                                e.message?.contains("permission") == true -> "Permission denied for RFID access. Please grant necessary permissions."
-                                e.message?.contains("connection") == true -> "Failed to connect to RFID module. Check hardware connections."
-                                else -> e.message ?: "RFID hardware error occurred."
-                            }
-                            val stackTrace = android.util.Log.getStackTraceString(e)
-                            errorDetails = Pair(errorMessage, stackTrace)
-                            showErrorDialog = true
-                            coroutineScope.launch {
+                                val stackTrace = android.util.Log.getStackTraceString(e)
+                                errorDetails = Pair(errorMessage, stackTrace)
+                                showErrorDialog = true
                                 snackbarHostState.showSnackbar(errorMessage)
-                            }
-                        } catch (e: Exception) {
-                            val errorMessage = "Unexpected error: ${e.message}"
-                            val stackTrace = android.util.Log.getStackTraceString(e)
-                            errorDetails = Pair(errorMessage, stackTrace)
-                            showErrorDialog = true
-                            coroutineScope.launch {
+                            } catch (e: Exception) {
+                                val errorMessage = "Unexpected error: ${e.message}"
+                                val stackTrace = android.util.Log.getStackTraceString(e)
+                                errorDetails = Pair(errorMessage, stackTrace)
+                                showErrorDialog = true
                                 snackbarHostState.showSnackbar(errorMessage)
+                            } finally {
+                                showRfidConfirmDialog = false
+                                rfidAssetToWrite = null
+                                existingRfidData = null
                             }
                         }
-                        showRfidConfirmDialog = false
-                        rfidAssetToWrite = null
-                        existingRfidData = null
                     }) {
                         Text("Overwrite")
                     }
@@ -620,8 +710,105 @@ fun AssetsScreen(
     }
 }
 @Composable
+private fun LocationFilterDialog(
+    title: String,
+    locations: List<LocationSummary>,
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
+    onLocationSelected: (Long?) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val filteredLocations = locations.filter { location ->
+        val query = searchQuery.lowercase()
+        location.name.lowercase().contains(query) ||
+        location.id.toString().contains(query) ||
+        (location.locationCode?.lowercase()?.contains(query) == true)
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = onSearchQueryChange,
+                    label = { Text("Search by name, code, or ID") },
+                    leadingIcon = {
+                        Icon(
+                            Icons.Default.Search,
+                            contentDescription = "Search",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                LazyColumn(
+                    modifier = Modifier.height(300.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    item {
+                        TextButton(
+                            onClick = { onLocationSelected(null) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                "All Locations",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+
+                    items(filteredLocations, key = { it.id }) { location ->
+                        TextButton(
+                            onClick = { onLocationSelected(location.id) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                Text(
+                                    location.name,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text(
+                                        "ID: ${location.id}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    location.locationCode?.let { code ->
+                                        Text(
+                                            "Code: $code",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@Composable
 private fun AssetCard(
     asset: AssetSummary,
+    onClick: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onPrint: () -> Unit,
@@ -629,7 +816,9 @@ private fun AssetCard(
 ) {
     val barcodeBitmap = rememberBarcodeImage(content = asset.id.toString(), width = 800, height = 220)
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
@@ -656,6 +845,12 @@ private fun AssetCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+                Box(
+                    modifier = Modifier
+                        .size(16.dp)
+                        .clip(CircleShape)
+                        .background(if (asset.currentRoomId == asset.baseRoomId) Color.Green else Color(0xFFFFA500))
+                )
             }
 
             // Asset Details
@@ -846,6 +1041,10 @@ private fun AssetFormDialog(
     val condition = rememberSaveable(initialCondition) { mutableStateOf(initialCondition) }
     val baseRoomId = remember { mutableStateOf(initialBaseRoomId) }
 
+    // Hierarchical location dialog state
+    val (showLocationDialog, setShowLocationDialog) = remember { mutableStateOf(false) }
+    val (locationSearchQuery, setLocationSearchQuery) = remember { mutableStateOf("") }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
@@ -882,11 +1081,12 @@ private fun AssetFormDialog(
                         unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                     )
                 )
-                var expanded by remember { mutableStateOf(false) }
                 
-                ExposedDropdownMenuBox(
-                    expanded = expanded,
-                    onExpandedChange = { expanded = it }
+                // Base location selection with hierarchical dialog
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { setShowLocationDialog(true) }
                 ) {
                     OutlinedTextField(
                         value = locations.find { it.id == baseRoomId.value }?.name ?: "No base location",
@@ -899,31 +1099,15 @@ private fun AssetFormDialog(
                             unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                         ),
                         trailingIcon = {
-                            ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
-                        },
-                        modifier = Modifier.menuAnchor()
-                    )
-                    ExposedDropdownMenu(
-                        expanded = expanded,
-                        onDismissRequest = { expanded = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("No base location") },
-                            onClick = {
-                                baseRoomId.value = null
-                                expanded = false
-                            }
-                        )
-                        locations.forEach { location ->
-                            DropdownMenuItem(
-                                text = { Text(location.name) },
-                                onClick = {
-                                    baseRoomId.value = location.id
-                                    expanded = false
-                                }
+                            Icon(
+                                Icons.Default.ArrowBack,
+                                contentDescription = "Select location",
+                                modifier = Modifier.rotate(270f), // Rotate to point down
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                        }
-                    }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
             }
         },
@@ -948,4 +1132,206 @@ private fun AssetFormDialog(
             }
         }
     )
+
+    // Hierarchical location selection dialog
+    if (showLocationDialog) {
+        HierarchicalLocationDialog(
+            title = "Select Base Location",
+            locations = locations,
+            searchQuery = locationSearchQuery,
+            onSearchQueryChange = setLocationSearchQuery,
+            onLocationSelected = { locationId ->
+                baseRoomId.value = locationId
+                setShowLocationDialog(false)
+                setLocationSearchQuery("")
+            },
+            onDismiss = {
+                setShowLocationDialog(false)
+                setLocationSearchQuery("")
+            }
+        )
+    }
+}
+
+@Composable
+private fun HierarchicalLocationDialog(
+    title: String,
+    locations: List<LocationSummary>,
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
+    onLocationSelected: (Long?) -> Unit,
+    onDismiss: () -> Unit
+) {
+    // Build hierarchical structure
+    val locationMap = locations.associateBy { it.id }
+    val rootLocations = locations.filter { it.parentId == null }
+
+    // Function to get all descendants of a location
+    fun getAllDescendants(locationId: Long): List<LocationSummary> {
+        val result = mutableListOf<LocationSummary>()
+        val queue = ArrayDeque<Long>()
+        queue.add(locationId)
+
+        while (queue.isNotEmpty()) {
+            val currentId = queue.removeFirst()
+            locations.filter { it.parentId == currentId }.forEach { child ->
+                result.add(child)
+                queue.add(child.id)
+            }
+        }
+        return result
+    }
+
+    // Filter locations based on search query
+    val filteredLocations = if (searchQuery.isBlank()) {
+        rootLocations
+    } else {
+        val query = searchQuery.lowercase()
+        locations.filter { location ->
+            location.name.lowercase().contains(query) ||
+            location.id.toString().contains(query) ||
+            (location.locationCode.lowercase().contains(query))
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = onSearchQueryChange,
+                    label = { Text("Search by name, code, or ID") },
+                    leadingIcon = {
+                        Icon(
+                            Icons.Default.Search,
+                            contentDescription = "Search",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                LazyColumn(
+                    modifier = Modifier.height(400.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // "No base location" option
+                    item {
+                        TextButton(
+                            onClick = { onLocationSelected(null) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                "No base location",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+
+                    // Hierarchical location items
+                    items(filteredLocations, key = { it.id }) { location ->
+                        HierarchicalLocationItem(
+                            location = location,
+                            allLocations = locations,
+                            locationMap = locationMap,
+                            onLocationSelected = onLocationSelected,
+                            level = 0
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@Composable
+private fun HierarchicalLocationItem(
+    location: LocationSummary,
+    allLocations: List<LocationSummary>,
+    locationMap: Map<Long, LocationSummary>,
+    onLocationSelected: (Long) -> Unit,
+    level: Int
+) {
+    val children = allLocations.filter { it.parentId == location.id }
+
+    Column {
+        TextButton(
+            onClick = { onLocationSelected(location.id) },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Indentation for hierarchy
+                    Spacer(modifier = Modifier.width((level * 24).dp))
+
+                    // Location icon
+                    Icon(
+                        imageVector = Icons.Default.Place,
+                        contentDescription = "Location",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            location.name,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                "ID: ${location.id}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                "Code: ${location.locationCode}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    // Children indicator
+                    if (location.hasChildren) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowForward,
+                            contentDescription = "Has children",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        // Render children
+        children.forEach { child ->
+            HierarchicalLocationItem(
+                location = child,
+                allLocations = allLocations,
+                locationMap = locationMap,
+                onLocationSelected = onLocationSelected,
+                level = level + 1
+            )
+        }
+    }
 }

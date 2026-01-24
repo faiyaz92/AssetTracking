@@ -28,7 +28,7 @@ object DatabaseModule {
             context,
             AssetTrackingDatabase::class.java,
             "asset-tracking.db"
-        ).addMigrations(AssetTrackingDatabase.MIGRATION_1_2).build()
+        ).addMigrations(AssetTrackingDatabase.MIGRATION_1_2, AssetTrackingDatabase.MIGRATION_2_3).build()
 
     @Provides
     fun provideLocationDao(database: AssetTrackingDatabase): LocationDao = database.locationDao()

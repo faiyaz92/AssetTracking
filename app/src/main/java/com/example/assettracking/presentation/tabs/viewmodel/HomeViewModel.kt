@@ -3,6 +3,8 @@ package com.example.assettracking.presentation.tabs.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.assettracking.domain.usecase.AssignAssetToRoomWithConditionUseCase
+import com.example.assettracking.domain.usecase.CreateMovementUseCase
+import com.example.assettracking.domain.usecase.FindAssetByIdUseCase
 import com.example.assettracking.domain.usecase.ObserveRoomsUseCase
 import com.example.assettracking.presentation.common.UiMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -23,7 +25,9 @@ data class HomeUiState(
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val observeRoomsUseCase: ObserveRoomsUseCase,
-    private val assignAssetToRoomWithConditionUseCase: AssignAssetToRoomWithConditionUseCase
+    private val assignAssetToRoomWithConditionUseCase: AssignAssetToRoomWithConditionUseCase,
+    private val findAssetByIdUseCase: FindAssetByIdUseCase,
+    private val createMovementUseCase: CreateMovementUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -45,9 +49,27 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             val assetId = assetCode.toLongOrNull()
             if (assetId != null) {
+                // First, find the asset to get its current location
+                val asset = findAssetByIdUseCase(assetId)
+                if (asset == null) {
+                    _uiState.update { it.copy(message = UiMessage("Asset not found")) }
+                    return@launch
+                }
+
+                // Assign asset to room with condition
                 val result = assignAssetToRoomWithConditionUseCase(assetId, roomId, condition)
                 result.onFailure { error ->
                     _uiState.update { it.copy(message = UiMessage(error.message ?: "Unable to move asset")) }
+                    return@launch
+                }
+
+                // Log movement for audit trail
+                try {
+                    createMovementUseCase(asset.id, asset.currentRoomId, roomId)
+                } catch (error: Exception) {
+                    _uiState.update {
+                        it.copy(message = UiMessage(error.message ?: "Asset moved but movement not logged"))
+                    }
                 }
             } else {
                 _uiState.update { it.copy(message = UiMessage("Invalid asset ID")) }

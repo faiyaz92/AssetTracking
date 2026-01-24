@@ -10,5 +10,11 @@ data class AssetListUiState(
     val rooms: List<LocationSummary> = emptyList(),
     val searchQuery: String = "",
     val isLoading: Boolean = true,
-    val message: UiMessage? = null
+    val message: UiMessage? = null,
+    // Grouping and filtering
+    val isGroupedByCurrentLocation: Boolean = false,
+    val isGroupedByBaseLocation: Boolean = false,
+    val currentLocationFilter: Long? = null,
+    val baseLocationFilter: Long? = null,
+    val groupedAssets: Map<String, List<AssetSummary>> = emptyMap()
 )

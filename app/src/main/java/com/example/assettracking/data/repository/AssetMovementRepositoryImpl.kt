@@ -30,6 +30,24 @@ class AssetMovementRepositoryImpl @Inject constructor(
         }
     }
 
+    override fun observeMovementsForAsset(assetId: Long): Flow<List<AssetMovement>> {
+        return assetMovementDao.observeMovementsForAsset(assetId).map { tuples ->
+            tuples.map { tuple ->
+                AssetMovement(
+                    id = tuple.movementId,
+                    assetId = tuple.assetId,
+                    assetName = tuple.assetName,
+                    fromRoomId = tuple.fromRoomId,
+                    fromRoomName = tuple.fromRoomName,
+                    toRoomId = tuple.toRoomId,
+                    toRoomName = tuple.toRoomName,
+                    condition = tuple.condition,
+                    timestamp = tuple.timestamp
+                )
+            }
+        }
+    }
+
     override suspend fun createMovement(assetId: Long, fromRoomId: Long?, toRoomId: Long, condition: String?) {
         val entity = AssetMovementEntity(
             assetId = assetId,

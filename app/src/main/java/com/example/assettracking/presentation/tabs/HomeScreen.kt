@@ -2,6 +2,7 @@
 
 package com.example.assettracking.presentation.tabs
 
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -48,12 +49,16 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanOptions
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -66,8 +71,6 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.assettracking.presentation.tabs.HomeViewModel
 import com.example.assettracking.domain.model.LocationSummary
-import com.journeyapps.barcodescanner.ScanContract
-import com.journeyapps.barcodescanner.ScanOptions
 
 data class DashboardItem(
     val title: String,
@@ -83,6 +86,11 @@ fun HomeScreen(
     onOpenAssets: () -> Unit,
     onOpenAuditTrail: () -> Unit,
     onQuickScan: () -> Unit,
+    onOpenRfidRadar: () -> Unit,
+    onOpenRfidRead: () -> Unit,
+    onOpenRfidWrite: () -> Unit,
+    onOpenDemoApp: () -> Unit,
+    onLocationScanned: (Long) -> Unit = {},
     rooms: List<LocationSummary> = emptyList(),
     onAssetMoved: (String, Long, String) -> Unit = { _, _, _ -> },
     viewModel: HomeViewModel = hiltViewModel()
@@ -90,6 +98,20 @@ fun HomeScreen(
     val showQuickScanDialog = remember { mutableStateOf(false) }
     val showRfidScanDialog = remember { mutableStateOf(false) }
     val rfidScanState by viewModel.rfidScanState.collectAsState()
+
+    val locationScannerLauncher = rememberLauncherForActivityResult(
+        contract = ScanContract()
+    ) { result ->
+        val contents = result.contents
+        if (contents != null) {
+            // Parse the location ID from the barcode (remove padding)
+            val locationId = contents.toLongOrNull()
+            if (locationId != null) {
+                onLocationScanned(locationId)
+            }
+        }
+    }
+
     val dashboardItems = listOf(
         DashboardItem(
             title = "Locations",
@@ -147,6 +169,34 @@ fun HomeScreen(
                 )
             ),
             onClick = { showQuickScanDialog.value = true }
+        ),
+        DashboardItem(
+            title = "Location Scan",
+            subtitle = "Scan Location Barcode",
+            icon = {
+                Icon(
+                    Icons.Default.Place,
+                    contentDescription = null,
+                    modifier = Modifier.size(32.dp),
+                    tint = Color.White
+                )
+            },
+            gradient = Brush.verticalGradient(
+                colors = listOf(
+                    Color(0xFFEA580C),
+                    Color(0xFFF97316)
+                )
+            ),
+            onClick = {
+                val scanOptions = ScanOptions().apply {
+                    setDesiredBarcodeFormats(ScanOptions.CODE_128)
+                    setPrompt("Scan location barcode")
+                    setCameraId(0)
+                    setBeepEnabled(true)
+                    setOrientationLocked(true)
+                }
+                locationScannerLauncher.launch(scanOptions)
+            }
         ),
         DashboardItem(
             title = "RFID Scan",
@@ -223,6 +273,82 @@ fun HomeScreen(
                 )
             ),
             onClick = { /* TODO: Implement settings */ }
+        ),
+        DashboardItem(
+            title = "RFID Radar",
+            subtitle = "Live Tag Scanning",
+            icon = {
+                Icon(
+                    Icons.Default.RssFeed,
+                    contentDescription = null,
+                    modifier = Modifier.size(32.dp),
+                    tint = Color.White
+                )
+            },
+            gradient = Brush.verticalGradient(
+                colors = listOf(
+                    Color(0xFFEC4899),
+                    Color(0xFFF472B6)
+                )
+            ),
+            onClick = onOpenRfidRadar
+        ),
+        DashboardItem(
+            title = "Read Tag",
+            subtitle = "RFID Tag Reader",
+            icon = {
+                Icon(
+                    Icons.Default.Analytics,
+                    contentDescription = null,
+                    modifier = Modifier.size(32.dp),
+                    tint = Color.White
+                )
+            },
+            gradient = Brush.verticalGradient(
+                colors = listOf(
+                    Color(0xFF8B5CF6),
+                    Color(0xFFA78BFA)
+                )
+            ),
+            onClick = onOpenRfidRead
+        ),
+        DashboardItem(
+            title = "Write Tag",
+            subtitle = "RFID Tag Writer",
+            icon = {
+                Icon(
+                    Icons.Default.QrCodeScanner,
+                    contentDescription = null,
+                    modifier = Modifier.size(32.dp),
+                    tint = Color.White
+                )
+            },
+            gradient = Brush.verticalGradient(
+                colors = listOf(
+                    Color(0xFF14B8A6),
+                    Color(0xFF5EEAD4)
+                )
+            ),
+            onClick = onOpenRfidWrite
+        ),
+        DashboardItem(
+            title = "Demo App",
+            subtitle = "Chainway C72 Reference",
+            icon = {
+                Icon(
+                    Icons.Default.RssFeed,
+                    contentDescription = null,
+                    modifier = Modifier.size(32.dp),
+                    tint = Color.White
+                )
+            },
+            gradient = Brush.verticalGradient(
+                colors = listOf(
+                    Color(0xFFDB2777),
+                    Color(0xFFF472B6)
+                )
+            ),
+            onClick = onOpenDemoApp
         )
     )
 

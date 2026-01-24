@@ -6,4 +6,11 @@ sealed interface AssetListEvent {
     data class DeleteAsset(val id: Long) : AssetListEvent
     data class UpdateSearch(val query: String) : AssetListEvent
     object ClearMessage : AssetListEvent
+
+    // Grouping and filtering events
+    object ToggleGroupByCurrentLocation : AssetListEvent
+    object ToggleGroupByBaseLocation : AssetListEvent
+    data class FilterByCurrentLocation(val roomId: Long?) : AssetListEvent
+    data class FilterByBaseLocation(val roomId: Long?) : AssetListEvent
+    object ClearAllFilters : AssetListEvent
 }
