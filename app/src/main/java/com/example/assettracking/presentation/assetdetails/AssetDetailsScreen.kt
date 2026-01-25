@@ -248,6 +248,45 @@ private fun AssetDetailsContent(
                                     style = MaterialTheme.typography.bodyLarge
                                 )
                             }
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+
+                        // Status
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(
+                                        when (asset.status) {
+                                            "At Home" -> Color(0xFF10B981).copy(alpha = 0.1f) // Green
+                                            "Deployed" -> Color(0xFFF59E0B).copy(alpha = 0.1f) // Orange
+                                            "Missing" -> Color(0xFFEF4444).copy(alpha = 0.1f) // Red
+                                            "Not Assigned" -> Color(0xFF3B82F6).copy(alpha = 0.1f) // Blue
+                                            else -> Color.Gray.copy(alpha = 0.1f)
+                                        }
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "S",
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        color = when (asset.status) {
+                                            "At Home" -> Color(0xFF10B981) // Green
+                                            "Deployed" -> Color(0xFFF59E0B) // Orange
+                                            "Missing" -> Color(0xFFEF4444) // Red
+                                            "Not Assigned" -> Color(0xFF3B82F6) // Blue
+                                            else -> Color.Gray
+                                        }
+                                    )
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Status: ${asset.status}",
+                                style = MaterialTheme.typography.bodyLarge
+                            )
                         }
                     }
                 }

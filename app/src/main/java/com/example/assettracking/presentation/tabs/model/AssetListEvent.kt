@@ -12,5 +12,7 @@ sealed interface AssetListEvent {
     object ToggleGroupByBaseLocation : AssetListEvent
     data class FilterByCurrentLocation(val roomId: Long?) : AssetListEvent
     data class FilterByBaseLocation(val roomId: Long?) : AssetListEvent
+    data class FilterByStatus(val status: String?) : AssetListEvent
+    data class ChangeGroupingMode(val mode: GroupingMode) : AssetListEvent
     object ClearAllFilters : AssetListEvent
 }

@@ -43,6 +43,12 @@ class LocationRepositoryImpl @Inject constructor(
                         locationCode = locationEntity.room.locationCode,
                         children = childrenTuples.map { it.toDomainModel() },
                         assets = assetTuples.map { tuple ->
+                            val status = when {
+                                tuple.assetBaseRoomId == null -> "Not Assigned"
+                                tuple.assetCurrentRoomId == null -> "Missing"
+                                tuple.assetBaseRoomId != tuple.assetCurrentRoomId -> "Deployed"
+                                else -> "At Home"
+                            }
                             AssetSummary(
                                 id = tuple.assetId,
                                 name = tuple.assetName,
@@ -51,7 +57,8 @@ class LocationRepositoryImpl @Inject constructor(
                                 baseRoomId = tuple.assetBaseRoomId,
                                 baseRoomName = tuple.baseRoomName,
                                 currentRoomId = tuple.assetCurrentRoomId,
-                                currentRoomName = locationEntity.room.name
+                                currentRoomName = locationEntity.room.name,
+                                status = status
                             )
                         }
                     )
@@ -99,6 +106,12 @@ class LocationRepositoryImpl @Inject constructor(
         locationCode = room.locationCode,
         children = emptyList(), // TODO: Get children
         assets = assets.map { asset ->
+            val status = when {
+                asset.baseRoomId == null -> "Not Assigned"
+                asset.currentRoomId == null -> "Missing"
+                asset.baseRoomId != asset.currentRoomId -> "Deployed"
+                else -> "At Home"
+            }
             AssetSummary(
                 id = asset.id,
                 name = asset.name,
@@ -107,7 +120,8 @@ class LocationRepositoryImpl @Inject constructor(
                 baseRoomId = asset.baseRoomId,
                 baseRoomName = null, // TODO: join to get base room name
                 currentRoomId = room.id,
-                currentRoomName = room.name
+                currentRoomName = room.name,
+                status = status
             )
         }
     )

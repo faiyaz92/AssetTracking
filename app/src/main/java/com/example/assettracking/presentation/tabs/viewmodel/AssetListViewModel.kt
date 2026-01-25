@@ -5,6 +5,10 @@ import androidx.lifecycle.viewModelScope
 import com.example.assettracking.presentation.common.UiMessage
 import com.example.assettracking.presentation.tabs.model.AssetListEvent
 import com.example.assettracking.presentation.tabs.model.AssetListUiState
+import com.example.assettracking.presentation.tabs.model.GroupingMode
+import com.example.assettracking.presentation.tabs.model.SubGroup
+import com.example.assettracking.presentation.tabs.model.GroupedItem
+import com.example.assettracking.domain.model.LocationSummary
 import com.example.assettracking.domain.usecase.CreateAssetUseCase
 import com.example.assettracking.domain.usecase.DeleteAssetUseCase
 import com.example.assettracking.domain.usecase.ObserveAssetsUseCase
@@ -51,6 +55,8 @@ class AssetListViewModel @Inject constructor(
             AssetListEvent.ToggleGroupByBaseLocation -> toggleGroupByBaseLocation()
             is AssetListEvent.FilterByCurrentLocation -> filterByCurrentLocation(event.roomId)
             is AssetListEvent.FilterByBaseLocation -> filterByBaseLocation(event.roomId)
+            is AssetListEvent.FilterByStatus -> filterByStatus(event.status)
+            is AssetListEvent.ChangeGroupingMode -> changeGroupingMode(event.mode)
             AssetListEvent.ClearAllFilters -> clearAllFilters()
         }
     }
@@ -158,14 +164,29 @@ class AssetListViewModel @Inject constructor(
         }
     }
 
+    private fun filterByStatus(status: String?) {
+        _uiState.update { state ->
+            val updatedState = state.copy(statusFilter = status)
+            updateDisplayData(updatedState)
+        }
+    }
+
     private fun clearAllFilters() {
         _uiState.update { state ->
             val updatedState = state.copy(
                 isGroupedByCurrentLocation = false,
                 isGroupedByBaseLocation = false,
                 currentLocationFilter = null,
-                baseLocationFilter = null
+                baseLocationFilter = null,
+                statusFilter = null
             )
+            updateDisplayData(updatedState)
+        }
+    }
+
+    private fun changeGroupingMode(mode: GroupingMode) {
+        _uiState.update { state ->
+            val updatedState = state.copy(groupingMode = mode)
             updateDisplayData(updatedState)
         }
     }
@@ -180,6 +201,9 @@ class AssetListViewModel @Inject constructor(
         }
         if (state.baseLocationFilter != null) {
             filteredAssets = filteredAssets.filter { it.baseRoomId == state.baseLocationFilter }
+        }
+        if (state.statusFilter != null) {
+            filteredAssets = filteredAssets.filter { it.status == state.statusFilter }
         }
 
         // Apply search filter to filtered results
@@ -203,9 +227,73 @@ class AssetListViewModel @Inject constructor(
             emptyMap()
         }
 
+        // Compute groupedData
+        val groupedData = when (state.groupingMode) {
+            GroupingMode.NONE -> emptyList()
+            GroupingMode.BY_BASE_LOCATION -> {
+                val groups = filteredAssets.groupBy { it.baseRoomId }
+                groups.map { (baseId, assets) ->
+                    val location = baseId?.let { id -> state.rooms.find { it.id == id } }
+                        ?: LocationSummary(
+                            id = -1L,
+                            name = "Unassigned",
+                            description = null,
+                            assetCount = 0,
+                            parentId = null,
+                            hasChildren = false,
+                            locationCode = "UNASSIGNED"
+                        )
+                    val subGroups = assets.groupBy { it.currentRoomId }.map { (currentId, subAssets) ->
+                        val subLocation = currentId?.let { id -> state.rooms.find { it.id == id } }
+                            ?: LocationSummary(
+                                id = -2L,
+                                name = "Missing",
+                                description = null,
+                                assetCount = 0,
+                                parentId = null,
+                                hasChildren = false,
+                                locationCode = "MISSING"
+                            )
+                        SubGroup(subLocation, subAssets)
+                    }
+                    GroupedItem(location, assets, subGroups)
+                }
+            }
+            GroupingMode.BY_CURRENT_LOCATION -> {
+                val groups = filteredAssets.groupBy { it.currentRoomId }
+                groups.map { (currentId, assets) ->
+                    val location = currentId?.let { id -> state.rooms.find { it.id == id } }
+                        ?: LocationSummary(
+                            id = -2L,
+                            name = "Missing",
+                            description = null,
+                            assetCount = 0,
+                            parentId = null,
+                            hasChildren = false,
+                            locationCode = "MISSING"
+                        )
+                    val subGroups = assets.groupBy { it.baseRoomId }.map { (baseId, subAssets) ->
+                        val subLocation = baseId?.let { id -> state.rooms.find { it.id == id } }
+                            ?: LocationSummary(
+                                id = -1L,
+                                name = "Unassigned",
+                                description = null,
+                                assetCount = 0,
+                                parentId = null,
+                                hasChildren = false,
+                                locationCode = "UNASSIGNED"
+                            )
+                        SubGroup(subLocation, subAssets)
+                    }
+                    GroupedItem(location, assets, subGroups)
+                }
+            }
+        }
+
         return state.copy(
             filteredAssets = filteredAssets,
-            groupedAssets = groupedAssets
+            groupedAssets = groupedAssets,
+            groupedData = groupedData
         )
     }
 }

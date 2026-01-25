@@ -94,6 +94,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
+import com.example.assettracking.presentation.tabs.model.GroupingMode
+import com.example.assettracking.presentation.tabs.model.GroupedItem
+import com.example.assettracking.presentation.tabs.model.SubGroup
 import com.example.assettracking.domain.model.AssetSummary
 import com.example.assettracking.domain.model.LocationSummary
 import com.example.assettracking.presentation.tabs.model.AssetListEvent
@@ -256,6 +259,30 @@ fun AssetsScreen(
                 shape = RoundedCornerShape(12.dp)
             )
 
+            // Grouping Mode Selection
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FilterChip(
+                    selected = state.groupingMode == GroupingMode.NONE,
+                    onClick = { viewModel.onEvent(AssetListEvent.ChangeGroupingMode(GroupingMode.NONE)) },
+                    label = { Text("No Grouping") }
+                )
+                FilterChip(
+                    selected = state.groupingMode == GroupingMode.BY_BASE_LOCATION,
+                    onClick = { viewModel.onEvent(AssetListEvent.ChangeGroupingMode(GroupingMode.BY_BASE_LOCATION)) },
+                    label = { Text("Group by Base Location") }
+                )
+                FilterChip(
+                    selected = state.groupingMode == GroupingMode.BY_CURRENT_LOCATION,
+                    onClick = { viewModel.onEvent(AssetListEvent.ChangeGroupingMode(GroupingMode.BY_CURRENT_LOCATION)) },
+                    label = { Text("Group by Current Location") }
+                )
+            }
+
             // Location Filters with Dialogs
             if (state.rooms.isNotEmpty()) {
                 Row(
@@ -316,40 +343,81 @@ fun AssetsScreen(
                     }
                 )
                 else -> {
-                    // Normal list display
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(state.filteredAssets, key = { it.id }) { asset ->
-                            AssetCard(
-                                asset = asset,
-                                onClick = { onAssetClick(asset.id) },
-                                onEdit = {
-                                    editingAsset = asset
-                                    showAssetDialog = true
-                                },
-                                onDelete = {
-                                    assetToDelete = asset
-                                    showDeleteDialog = true
-                                },
-                                onPrint = {
-                                    val allGranted = bluetoothPermissions.all { permission ->
-                                        ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
-                                    }
-                                    if (allGranted) {
-                                        printBarcode(context, asset.id.toString().padStart(6, '0'), asset.name)
-                                    } else {
-                                        pendingPrintAsset = asset
-                                        permissionLauncher.launch(bluetoothPermissions)
-                                    }
-                                },
-                                onRfidWrite = {
-                                    rfidAssetToWrite = asset
-                                    showRfidDialog = true
+                    when (state.groupingMode) {
+                        GroupingMode.NONE -> {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                items(state.filteredAssets, key = { it.id }) { asset ->
+                                    AssetCard(
+                                        asset = asset,
+                                        onClick = { onAssetClick(asset.id) },
+                                        onEdit = {
+                                            editingAsset = asset
+                                            showAssetDialog = true
+                                        },
+                                        onDelete = {
+                                            assetToDelete = asset
+                                            showDeleteDialog = true
+                                        },
+                                        onPrint = {
+                                            val allGranted = bluetoothPermissions.all { permission ->
+                                                ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+                                            }
+                                            if (allGranted) {
+                                                printBarcode(context, asset.id.toString().padStart(6, '0'), asset.name)
+                                            } else {
+                                                pendingPrintAsset = asset
+                                                permissionLauncher.launch(bluetoothPermissions)
+                                            }
+                                        },
+                                        onRfidWrite = {
+                                            rfidAssetToWrite = asset
+                                            showRfidDialog = true
+                                        }
+                                    )
                                 }
-                            )
+                            }
+                        }
+                        else -> {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                items(state.groupedData, key = { it.location?.id ?: -1 }) { group ->
+                                    GroupedCard(
+                                        group = group,
+                                        groupingMode = state.groupingMode,
+                                        onAssetClick = onAssetClick,
+                                        onEdit = { asset ->
+                                            editingAsset = asset
+                                            showAssetDialog = true
+                                        },
+                                        onDelete = { asset ->
+                                            assetToDelete = asset
+                                            showDeleteDialog = true
+                                        },
+                                        onPrint = { asset ->
+                                            val allGranted = bluetoothPermissions.all { permission ->
+                                                ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+                                            }
+                                            if (allGranted) {
+                                                printBarcode(context, asset.id.toString().padStart(6, '0'), asset.name)
+                                            } else {
+                                                pendingPrintAsset = asset
+                                                permissionLauncher.launch(bluetoothPermissions)
+                                            }
+                                        },
+                                        onRfidWrite = { asset ->
+                                            rfidAssetToWrite = asset
+                                            showRfidDialog = true
+                                        }
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -709,6 +777,8 @@ fun AssetsScreen(
         )
     }
 }
+
+// ---- Helpers ----
 @Composable
 private fun LocationFilterDialog(
     title: String,
@@ -806,6 +876,238 @@ private fun LocationFilterDialog(
 }
 
 @Composable
+private fun AssetCardContent(
+    asset: AssetSummary,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onPrint: () -> Unit,
+    onRfidWrite: () -> Unit
+) {
+    val barcodeBitmap = rememberBarcodeImage(content = asset.id.toString(), width = 800, height = 220)
+    Column(modifier = Modifier.padding(20.dp)) {
+        // Asset Header
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = asset.name,
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Bold
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "Code: ${asset.id.toString().padStart(6, '0')}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .size(16.dp)
+                    .clip(CircleShape)
+                    .background(if (asset.currentRoomId == asset.baseRoomId) Color.Green else Color(0xFFFFA500))
+            )
+        }
+
+        // Asset Details
+        asset.details?.takeIf { it.isNotBlank() }?.let { details ->
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = details,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        // Asset Condition
+        asset.condition?.takeIf { it.isNotBlank() }?.let { condition ->
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Start,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color(0xFF10B981).copy(alpha = 0.1f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "C",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF10B981)
+                        )
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = condition,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        // Asset Status
+        Spacer(Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Start,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(24.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(
+                        when (asset.status) {
+                            "At Home" -> Color(0xFF10B981).copy(alpha = 0.1f) // Green
+                            "Deployed" -> Color(0xFFF59E0B).copy(alpha = 0.1f) // Orange
+                            "Missing" -> Color(0xFFEF4444).copy(alpha = 0.1f) // Red
+                            "Not Assigned" -> Color(0xFF3B82F6).copy(alpha = 0.1f) // Blue
+                            else -> Color.Gray.copy(alpha = 0.1f)
+                        }
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "S",
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = when (asset.status) {
+                            "At Home" -> Color(0xFF10B981) // Green
+                            "Deployed" -> Color(0xFFF59E0B) // Orange
+                            "Missing" -> Color(0xFFEF4444) // Red
+                            "Not Assigned" -> Color(0xFF3B82F6) // Blue
+                            else -> Color.Gray
+                        }
+                    )
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = asset.status,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        // Location Info
+        Spacer(Modifier.height(12.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Start
+        ) {
+            Icon(
+                Icons.Default.Home,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = buildString {
+                    append("Base: ")
+                    append(asset.baseRoomName ?: "Unassigned")
+                    if (asset.currentRoomName != null && asset.currentRoomName != asset.baseRoomName) {
+                        append(" | Current: ${asset.currentRoomName}")
+                    }
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        // Barcode Image
+        barcodeBitmap?.let { bitmap ->
+            Spacer(Modifier.height(16.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Image(
+                    bitmap = bitmap,
+                    contentDescription = "Barcode for ${asset.id.toString().padStart(6, '0')}",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(100.dp)
+                        .padding(8.dp)
+                )
+            }
+        }
+
+        // Action Buttons
+        Spacer(Modifier.height(16.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(
+                onClick = onRfidWrite,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(MaterialTheme.colorScheme.tertiaryContainer)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.QrCodeScanner, // Using QrCodeScanner as RFID icon
+                    contentDescription = "Write RFID tag",
+                    tint = MaterialTheme.colorScheme.onTertiaryContainer
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            IconButton(
+                onClick = onPrint,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(MaterialTheme.colorScheme.primaryContainer)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Print,
+                    contentDescription = "Print barcode",
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            IconButton(
+                onClick = onEdit,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(MaterialTheme.colorScheme.secondaryContainer)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Edit,
+                    contentDescription = "Edit asset",
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            IconButton(
+                onClick = onDelete,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(MaterialTheme.colorScheme.errorContainer)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = "Delete asset",
+                    tint = MaterialTheme.colorScheme.onErrorContainer
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun AssetCard(
     asset: AssetSummary,
     onClick: () -> Unit,
@@ -814,7 +1116,6 @@ private fun AssetCard(
     onPrint: () -> Unit,
     onRfidWrite: () -> Unit
 ) {
-    val barcodeBitmap = rememberBarcodeImage(content = asset.id.toString(), width = 800, height = 220)
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -823,183 +1124,7 @@ private fun AssetCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
-        Column(modifier = Modifier.padding(20.dp)) {
-            // Asset Header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = asset.name,
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontWeight = FontWeight.Bold
-                        ),
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = "Code: ${asset.id.toString().padStart(6, '0')}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Box(
-                    modifier = Modifier
-                        .size(16.dp)
-                        .clip(CircleShape)
-                        .background(if (asset.currentRoomId == asset.baseRoomId) Color.Green else Color(0xFFFFA500))
-                )
-            }
-
-            // Asset Details
-            asset.details?.takeIf { it.isNotBlank() }?.let { details ->
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = details,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            // Asset Condition
-            asset.condition?.takeIf { it.isNotBlank() }?.let { condition ->
-                Spacer(Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Start,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(24.dp)
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(Color(0xFF10B981).copy(alpha = 0.1f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "C",
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF10B981)
-                            )
-                        )
-                    }
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = condition,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            // Location Info
-            Spacer(Modifier.height(12.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Start
-            ) {
-                Icon(
-                    Icons.Default.Home,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = buildString {
-                        append("Base: ")
-                        append(asset.baseRoomName ?: "Unassigned")
-                        if (asset.currentRoomName != null && asset.currentRoomName != asset.baseRoomName) {
-                            append(" | Current: ${asset.currentRoomName}")
-                        }
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            // Barcode Image
-            barcodeBitmap?.let { bitmap ->
-                Spacer(Modifier.height(16.dp))
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                ) {
-                    Image(
-                        bitmap = bitmap,
-                        contentDescription = "Barcode for ${asset.id.toString().padStart(6, '0')}",
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(100.dp)
-                            .padding(8.dp)
-                    )
-                }
-            }
-
-            // Action Buttons
-            Spacer(Modifier.height(16.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(
-                    onClick = onRfidWrite,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(MaterialTheme.colorScheme.tertiaryContainer)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.QrCodeScanner, // Using QrCodeScanner as RFID icon
-                        contentDescription = "Write RFID tag",
-                        tint = MaterialTheme.colorScheme.onTertiaryContainer
-                    )
-                }
-                Spacer(Modifier.width(8.dp))
-                IconButton(
-                    onClick = onPrint,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(MaterialTheme.colorScheme.primaryContainer)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Print,
-                        contentDescription = "Print barcode",
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
-                Spacer(Modifier.width(8.dp))
-                IconButton(
-                    onClick = onEdit,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(MaterialTheme.colorScheme.secondaryContainer)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Edit,
-                        contentDescription = "Edit asset",
-                        tint = MaterialTheme.colorScheme.onSecondaryContainer
-                    )
-                }
-                Spacer(Modifier.width(8.dp))
-                IconButton(
-                    onClick = onDelete,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(MaterialTheme.colorScheme.errorContainer)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = "Delete asset",
-                        tint = MaterialTheme.colorScheme.onErrorContainer
-                    )
-                }
-            }
-        }
+        AssetCardContent(asset, onEdit, onDelete, onPrint, onRfidWrite)
     }
 }
 
@@ -1083,32 +1208,28 @@ private fun AssetFormDialog(
                 )
                 
                 // Base location selection with hierarchical dialog
-                Box(
+                OutlinedTextField(
+                    value = locations.find { it.id == baseRoomId.value }?.name ?: "No base location",
+                    onValueChange = {},
+                    label = { Text("Base location (optional)") },
+                    readOnly = true,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = TextFieldDefaults.outlinedTextFieldColors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                    ),
+                    trailingIcon = {
+                        Icon(
+                            Icons.Default.ArrowBack,
+                            contentDescription = "Select location",
+                            modifier = Modifier.rotate(270f), // Rotate to point down
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { setShowLocationDialog(true) }
-                ) {
-                    OutlinedTextField(
-                        value = locations.find { it.id == baseRoomId.value }?.name ?: "No base location",
-                        onValueChange = {},
-                        label = { Text("Base location (optional)") },
-                        readOnly = true,
-                        shape = RoundedCornerShape(12.dp),
-                        colors = TextFieldDefaults.outlinedTextFieldColors(
-                            focusedBorderColor = MaterialTheme.colorScheme.primary,
-                            unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                        ),
-                        trailingIcon = {
-                            Icon(
-                                Icons.Default.ArrowBack,
-                                contentDescription = "Select location",
-                                modifier = Modifier.rotate(270f), // Rotate to point down
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
+                )
             }
         },
         confirmButton = {
@@ -1150,6 +1271,88 @@ private fun AssetFormDialog(
                 setLocationSearchQuery("")
             }
         )
+    }
+}
+
+@Composable
+private fun HierarchicalLocationItem(
+    location: LocationSummary,
+    allLocations: List<LocationSummary>,
+    locationMap: Map<Long, LocationSummary>,
+    onLocationSelected: (Long) -> Unit,
+    level: Int
+) {
+    val children = allLocations.filter { it.parentId == location.id }
+
+    Column {
+        TextButton(
+            onClick = { onLocationSelected(location.id) },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Indentation for hierarchy
+                    Spacer(modifier = Modifier.width((level * 24).dp))
+
+                    // Location icon
+                    Icon(
+                        imageVector = Icons.Default.Place,
+                        contentDescription = "Location",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            location.name,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                "ID: ${location.id}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                "Code: ${location.locationCode}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    // Children indicator
+                    if (location.hasChildren) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowForward,
+                            contentDescription = "Has children",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        // Render children
+        children.forEach { child ->
+            HierarchicalLocationItem(
+                location = child,
+                allLocations = allLocations,
+                locationMap = locationMap,
+                onLocationSelected = onLocationSelected,
+                level = level + 1
+            )
+        }
     }
 }
 
@@ -1255,83 +1458,19 @@ private fun HierarchicalLocationDialog(
 }
 
 @Composable
-private fun HierarchicalLocationItem(
-    location: LocationSummary,
-    allLocations: List<LocationSummary>,
-    locationMap: Map<Long, LocationSummary>,
-    onLocationSelected: (Long) -> Unit,
-    level: Int
+private fun GroupedCard(
+    group: GroupedItem,
+    groupingMode: GroupingMode,
+    onAssetClick: (Long) -> Unit,
+    onEdit: (AssetSummary) -> Unit,
+    onDelete: (AssetSummary) -> Unit,
+    onPrint: (AssetSummary) -> Unit,
+    onRfidWrite: (AssetSummary) -> Unit
 ) {
-    val children = allLocations.filter { it.parentId == location.id }
-
-    Column {
-        TextButton(
-            onClick = { onLocationSelected(location.id) },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Indentation for hierarchy
-                    Spacer(modifier = Modifier.width((level * 24).dp))
-
-                    // Location icon
-                    Icon(
-                        imageVector = Icons.Default.Place,
-                        contentDescription = "Location",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp)
-                    )
-
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            location.name,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Text(
-                                "ID: ${location.id}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                "Code: ${location.locationCode}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-
-                    // Children indicator
-                    if (location.hasChildren) {
-                        Icon(
-                            imageVector = Icons.Default.ArrowForward,
-                            contentDescription = "Has children",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
-            }
-        }
-
-        // Render children
-        children.forEach { child ->
-            HierarchicalLocationItem(
-                location = child,
-                allLocations = allLocations,
-                locationMap = locationMap,
-                onLocationSelected = onLocationSelected,
-                level = level + 1
-            )
-        }
-    }
+    Text("Grouped Card")
 }
+
+// End of file helper
+
+
+

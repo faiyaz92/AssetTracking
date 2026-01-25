@@ -88,25 +88,43 @@ class AssetRepositoryImpl @Inject constructor(
         return true
     }
 
-    private fun AssetWithRoomTuple.toDomainModel(): AssetSummary = AssetSummary(
-        id = assetId,
-        name = assetName,
-        details = assetDetails,
-        condition = assetCondition,
-        baseRoomId = assetBaseRoomId,
-        baseRoomName = baseRoomName,
-        currentRoomId = assetCurrentRoomId,
-        currentRoomName = currentRoomName
-    )
+    private fun AssetWithRoomTuple.toDomainModel(): AssetSummary {
+        val status = when {
+            assetBaseRoomId == null -> "Not Assigned"
+            assetCurrentRoomId == null -> "Missing"
+            assetBaseRoomId != assetCurrentRoomId -> "Deployed"
+            else -> "At Home"
+        }
+        return AssetSummary(
+            id = assetId,
+            name = assetName,
+            details = assetDetails,
+            condition = assetCondition,
+            status = status,
+            baseRoomId = assetBaseRoomId,
+            baseRoomName = baseRoomName,
+            currentRoomId = assetCurrentRoomId,
+            currentRoomName = currentRoomName
+        )
+    }
 
-    private fun AssetEntity.toDomainModel(): AssetSummary = AssetSummary(
-        id = id,
-        name = name,
-        details = details,
-        condition = condition,
-        baseRoomId = baseRoomId,
-        baseRoomName = null,
-        currentRoomId = currentRoomId,
-        currentRoomName = null
-    )
+    private fun AssetEntity.toDomainModel(): AssetSummary {
+        val status = when {
+            baseRoomId == null -> "Not Assigned"
+            currentRoomId == null -> "Missing"
+            baseRoomId != currentRoomId -> "Deployed"
+            else -> "At Home"
+        }
+        return AssetSummary(
+            id = id,
+            name = name,
+            details = details,
+            condition = condition,
+            status = status,
+            baseRoomId = baseRoomId,
+            baseRoomName = null,
+            currentRoomId = currentRoomId,
+            currentRoomName = null
+        )
+    }
 }
