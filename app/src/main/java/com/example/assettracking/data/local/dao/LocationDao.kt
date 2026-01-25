@@ -54,10 +54,12 @@ interface LocationDao {
                a.condition AS assetCondition,
                a.baseRoomId AS assetBaseRoomId,
                br.name AS baseRoomName,
-               a.currentRoomId AS assetCurrentRoomId
+               a.currentRoomId AS assetCurrentRoomId,
+               cr.name AS currentRoomName
         FROM assets a
         LEFT JOIN locations br ON br.id = a.baseRoomId
-        WHERE a.currentRoomId = :locationId
+        LEFT JOIN locations cr ON cr.id = a.currentRoomId
+        WHERE a.currentRoomId = :locationId OR a.baseRoomId = :locationId
         ORDER BY a.name
         """
     )
@@ -108,6 +110,9 @@ interface LocationDao {
 
     @Query("SELECT locationCode FROM locations WHERE parentId IS NULL ORDER BY locationCode")
     suspend fun getAllSuperParentLocationCodes(): List<String>
+
+    @Query("SELECT id AS locationId, parentId FROM locations")
+    suspend fun getLocationHierarchy(): List<com.example.assettracking.data.local.model.LocationParentTuple>
 
     @Query(
         """

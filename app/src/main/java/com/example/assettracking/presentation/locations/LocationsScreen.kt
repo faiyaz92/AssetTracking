@@ -119,6 +119,34 @@ fun LocationsScreen(
         }
     }
 
+    // Precompute descendant counts and descendant asset totals for every location
+    val (descendantLocationCount, descendantAssetCount) = remember(state.locations) {
+        val childrenByParent = state.locations.groupBy { it.parentId }
+
+        fun accumulate(locationId: Long): Pair<Int, Int> {
+            val children = childrenByParent[locationId] ?: emptyList()
+            var totalChildren = 0
+            var totalAssets = 0
+            for (child in children) {
+                totalChildren += 1
+                totalAssets += child.assetCount
+                val (childCount, childAssets) = accumulate(child.id)
+                totalChildren += childCount
+                totalAssets += childAssets
+            }
+            return totalChildren to totalAssets
+        }
+
+        val childCountMap = mutableMapOf<Long, Int>()
+        val assetCountMap = mutableMapOf<Long, Int>()
+        state.locations.forEach { location ->
+            val (c, a) = accumulate(location.id)
+            childCountMap[location.id] = c
+            assetCountMap[location.id] = a
+        }
+        childCountMap to assetCountMap
+    }
+
     val locationScannerLauncher = rememberLauncherForActivityResult(
         contract = ScanContract()
     ) { result ->
@@ -334,6 +362,8 @@ fun LocationsScreen(
                     items(filteredLocations, key = { it.id }) { room ->
                         RoomCard(
                             room = room,
+                            descendantLocationCount = descendantLocationCount[room.id] ?: 0,
+                            descendantAssetCount = descendantAssetCount[room.id] ?: 0,
                             onClick = { onOpenLocation(room.id) },
                             onEdit = {
                                 editingRoom = room
@@ -407,6 +437,8 @@ fun LocationsScreen(
 @Composable
 private fun RoomCard(
     room: LocationSummary,
+    descendantLocationCount: Int,
+    descendantAssetCount: Int,
     onClick: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
@@ -512,6 +544,66 @@ private fun RoomCard(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+
+            if (descendantLocationCount > 0) {
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Start,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFF6366F1).copy(alpha = 0.1f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = descendantLocationCount.toString(),
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF6366F1)
+                            )
+                        )
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        text = "Child locations (all levels)",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Spacer(Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Start,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFF0EA5E9).copy(alpha = 0.1f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = descendantAssetCount.toString(),
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF0EA5E9)
+                            )
+                        )
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        text = "Assets across child locations",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
 
             // Action Buttons

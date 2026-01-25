@@ -57,7 +57,7 @@ class LocationRepositoryImpl @Inject constructor(
                                 baseRoomId = tuple.assetBaseRoomId,
                                 baseRoomName = tuple.baseRoomName,
                                 currentRoomId = tuple.assetCurrentRoomId,
-                                currentRoomName = locationEntity.room.name,
+                                currentRoomName = tuple.currentRoomName,
                                 status = status
                             )
                         }

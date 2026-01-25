@@ -11,9 +11,11 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.example.assettracking.presentation.assetdetails.AssetDetailsScreen
 import com.example.assettracking.presentation.assets.AssetsScreen
+import com.example.assettracking.presentation.audit.AuditDetailScreen
 import com.example.assettracking.presentation.locationdetail.LocationDetailScreen
 import com.example.assettracking.presentation.locationdetail.LocationDetailViewModel
 import com.example.assettracking.presentation.locations.LocationsScreen
+import com.example.assettracking.presentation.audit.AuditScreen
 import com.example.assettracking.presentation.rfiddemo.RfidRadarScreen
 import com.example.assettracking.presentation.rfiddemo.RfidReadScreen
 import com.example.assettracking.presentation.rfiddemo.RfidWriteScreen
@@ -28,6 +30,8 @@ object Destinations {
     const val LocationDetail = "location_detail"
     const val AssetDetails = "asset_details"
     const val AuditTrail = "audit_trail"
+    const val Audit = "audit"
+    const val AuditDetail = "audit_detail"
     const val RfidRadar = "rfid_radar"
     const val RfidRead = "rfid_read"
     const val RfidWrite = "rfid_write"
@@ -40,6 +44,8 @@ object Routes {
     const val LocationDetail = "${Destinations.LocationDetail}/{locationIdentifier}"
     const val AssetDetails = "${Destinations.AssetDetails}/{assetId}"
     const val AuditTrail = Destinations.AuditTrail
+    const val Audit = Destinations.Audit
+    const val AuditDetail = "${Destinations.AuditDetail}/{auditId}"
     const val RfidRadar = Destinations.RfidRadar
     const val RfidRead = Destinations.RfidRead
     const val RfidWrite = Destinations.RfidWrite
@@ -59,6 +65,7 @@ fun AssetTrackingNavHost(navController: NavHostController) {
             HomeScreen(
                 onOpenLocations = { navController.navigate(Routes.Locations) },
                 onOpenAssets = { navController.navigate(Routes.Assets) },
+                onOpenAudit = { navController.navigate(Routes.Audit) },
                 onOpenAuditTrail = { navController.navigate(Routes.AuditTrail) },
                 onQuickScan = { /* Not used */ },
                 onOpenRfidRadar = { navController.navigate(Routes.RfidRadar) },
@@ -111,6 +118,22 @@ fun AssetTrackingNavHost(navController: NavHostController) {
         }
         composable(Routes.AuditTrail) {
             AuditTrailScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
+        composable(Routes.Audit) {
+            AuditScreen(
+                onBack = { navController.popBackStack() },
+                onOpenAuditDetail = { auditId ->
+                    navController.navigate(Routes.AuditDetail.replace("{auditId}", auditId.toString()))
+                }
+            )
+        }
+        composable(
+            route = Routes.AuditDetail,
+            arguments = listOf(navArgument("auditId") { type = NavType.LongType })
+        ) {
+            AuditDetailScreen(
                 onBack = { navController.popBackStack() }
             )
         }

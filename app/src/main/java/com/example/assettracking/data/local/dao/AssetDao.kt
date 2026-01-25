@@ -39,4 +39,13 @@ interface AssetDao {
 
     @Query("UPDATE assets SET currentRoomId = NULL WHERE id = :assetId")
     suspend fun detachAssetFromRoom(assetId: Long)
+
+    @Query("SELECT id FROM assets WHERE currentRoomId IN (:locationIds)")
+    suspend fun getAssetIdsByCurrentLocations(locationIds: List<Long>): List<Long>
+
+    @Query("SELECT id FROM assets WHERE baseRoomId IN (:locationIds)")
+    suspend fun getAssetIdsByBaseLocations(locationIds: List<Long>): List<Long>
+
+    @Query("UPDATE assets SET currentRoomId = NULL WHERE id IN (:assetIds)")
+    suspend fun clearCurrentLocation(assetIds: List<Long>)
 }

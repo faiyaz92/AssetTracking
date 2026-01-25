@@ -34,6 +34,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -105,13 +106,14 @@ private data class FabAction(
 )
 
 @Composable
-private fun FabMenuButton(action: FabAction) {
+private fun FabMenuButton(action: FabAction, modifier: Modifier = Modifier) {
     ExtendedFloatingActionButton(
         onClick = action.onClick,
         containerColor = action.containerColor,
         contentColor = Color.White,
         text = { Text(action.label) },
-        icon = { Icon(action.icon, contentDescription = action.label) }
+        icon = { Icon(action.icon, contentDescription = action.label) },
+        modifier = modifier
     )
 }
 
@@ -217,7 +219,7 @@ fun LocationDetailScreen(
         },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         floatingActionButton = {
-            var fabExpanded by remember { mutableStateOf(true) }
+            var fabExpanded by remember { mutableStateOf(false) }
 
             val fabActions = listOf(
                 FabAction(
@@ -273,7 +275,10 @@ fun LocationDetailScreen(
                         horizontalAlignment = Alignment.End
                     ) {
                         fabActions.forEach { action ->
-                            FabMenuButton(action = action)
+                            FabMenuButton(
+                                action = action,
+                                modifier = Modifier.width(200.dp)
+                            )
                         }
                     }
                 }
@@ -928,11 +933,14 @@ private fun LocationDetailContent(
     val missingAssets = assets.filter { it.baseRoomId == locationId && it.currentRoomId == null }
     val hasAnyAssets = currentAssets.isNotEmpty() || belongingAssets.isNotEmpty()
 
+    val childLocationCount = children.size
+    val childAssetsTotal = children.sumOf { it.assetCount }
+
     var selectedTab by remember { mutableStateOf(LocationAssetTab.CURRENT) }
 
     val (selectedAssets, tabTitle) = when (selectedTab) {
         LocationAssetTab.CURRENT -> currentAssets to "Current Assets"
-        LocationAssetTab.BELONGING -> belongingAssets to "Belonging Assets"
+        LocationAssetTab.BELONGING -> belongingAssets to "Current Location's Assets"
         LocationAssetTab.MISSING -> missingAssets to "Missing Assets"
     }
 
@@ -995,6 +1003,15 @@ private fun LocationDetailContent(
                                     )
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
+                            }
+                            if (childLocationCount > 0) {
+                                Text(
+                                    "Child locations: $childLocationCount | Assets in children: $childAssetsTotal",
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        color = Color.White.copy(alpha = 0.9f)
+                                    )
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
                             }
                             Text(
                                 if (children.isNotEmpty()) "Manage child locations" else "Manage assets in this location",
@@ -1107,10 +1124,36 @@ private fun LocationDetailContent(
             }
 
             item {
+                data class TileConfig(
+                    val title: String,
+                    val count: Int,
+                    val subtitle: String,
+                    val color: Color,
+                    val tab: LocationAssetTab
+                )
+
                 val tiles = listOf(
-                    Triple("Current", currentAssets.size, "Self: $currentSelfCount | Other: $currentOtherCount") to LocationAssetTab.CURRENT,
-                    Triple("Belonging", belongingAssets.size, "At home: $belongingAtHome | Other: $belongingElsewhere") to LocationAssetTab.BELONGING,
-                    Triple("Missing", missingCount, "Current empty") to LocationAssetTab.MISSING
+                    TileConfig(
+                        title = "Current Assets",
+                        count = currentAssets.size,
+                        subtitle = "This location: $currentSelfCount | Other location: $currentOtherCount",
+                        color = Color(0xFF0EA5E9),
+                        tab = LocationAssetTab.CURRENT
+                    ),
+                    TileConfig(
+                        title = "Current Location's Assets",
+                        count = belongingAssets.size,
+                        subtitle = "At this location: $belongingAtHome | Found elsewhere: $belongingElsewhere",
+                        color = Color(0xFF10B981),
+                        tab = LocationAssetTab.BELONGING
+                    ),
+                    TileConfig(
+                        title = "Missing",
+                        count = missingCount,
+                        subtitle = "Not placed in any location",
+                        color = Color(0xFFF97316),
+                        tab = LocationAssetTab.MISSING
+                    )
                 )
 
                 Column(
@@ -1122,13 +1165,14 @@ private fun LocationDetailContent(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            rowItems.forEach { (data, tab) ->
+                            rowItems.forEach { config ->
                                 SummaryTile(
-                                    title = data.first,
-                                    count = data.second,
-                                    subtitle = data.third,
-                                    selected = selectedTab == tab,
-                                    onClick = { selectedTab = tab },
+                                    title = config.title,
+                                    count = config.count,
+                                    subtitle = config.subtitle,
+                                    accentColor = config.color,
+                                    selected = selectedTab == config.tab,
+                                    onClick = { selectedTab = config.tab },
                                     modifier = Modifier.weight(1f)
                                 )
                             }
@@ -1170,6 +1214,23 @@ private fun LocationDetailContent(
                 }
             }
         }
+        if (!hasAnyAssets) {
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 48.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "No assets are assigned to or based in this location yet.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -1180,25 +1241,62 @@ private fun SummaryTile(
     title: String,
     count: Int,
     subtitle: String,
+    accentColor: Color,
     selected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val background = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant
-    val borderColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+    val backgroundColor = if (selected) accentColor else MaterialTheme.colorScheme.surfaceVariant
+    val primaryTextColor = if (selected) Color.White else MaterialTheme.colorScheme.onSurface
+    val secondaryTextColor = if (selected) Color.White.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant
 
     Card(
         modifier = modifier
+            .height(136.dp)
             .clickable { onClick() },
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = background),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (selected) 6.dp else 2.dp),
-        border = BorderStroke(1.dp, borderColor)
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = backgroundColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (selected) 8.dp else 4.dp),
+        border = if (selected) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
-        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(title, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
-            Text("$count", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSurface)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Box(modifier = Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(title, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold), color = primaryTextColor)
+                Text(
+                    text = "$count",
+                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold),
+                    color = primaryTextColor
+                )
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = secondaryTextColor,
+                    maxLines = 2
+                )
+            }
+
+            if (selected) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(10.dp)
+                        .size(28.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color.White.copy(alpha = 0.2f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Check,
+                        contentDescription = "Selected tile",
+                        tint = Color.White
+                    )
+                }
+            }
         }
     }
 }

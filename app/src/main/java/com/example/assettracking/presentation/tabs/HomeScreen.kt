@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Analytics
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Inventory2
@@ -84,6 +85,7 @@ data class DashboardItem(
 fun HomeScreen(
     onOpenLocations: () -> Unit,
     onOpenAssets: () -> Unit,
+    onOpenAudit: () -> Unit,
     onOpenAuditTrail: () -> Unit,
     onQuickScan: () -> Unit,
     onOpenRfidRadar: () -> Unit,
@@ -150,6 +152,25 @@ fun HomeScreen(
                 )
             ),
             onClick = onOpenAssets
+        ),
+        DashboardItem(
+            title = "Audit",
+            subtitle = "Inventory Checks",
+            icon = {
+                Icon(
+                    Icons.Default.CheckCircle,
+                    contentDescription = null,
+                    modifier = Modifier.size(32.dp),
+                    tint = Color.White
+                )
+            },
+            gradient = Brush.verticalGradient(
+                colors = listOf(
+                    Color(0xFF0EA5E9),
+                    Color(0xFF22C55E)
+                )
+            ),
+            onClick = onOpenAudit
         ),
         DashboardItem(
             title = "Scan",
