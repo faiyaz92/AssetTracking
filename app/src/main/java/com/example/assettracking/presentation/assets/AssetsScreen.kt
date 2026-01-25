@@ -302,6 +302,7 @@ fun AssetsScreen(
                         label = { Text("Status") },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = statusMenuExpanded) },
                         modifier = Modifier
+                            .menuAnchor()
                             .fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
                     )
@@ -351,6 +352,7 @@ fun AssetsScreen(
                         label = { Text("Grouping") },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = groupingMenuExpanded) },
                         modifier = Modifier
+                            .menuAnchor()
                             .fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
                     )
