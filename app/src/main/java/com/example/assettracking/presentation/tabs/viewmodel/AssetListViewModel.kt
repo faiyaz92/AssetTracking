@@ -247,12 +247,12 @@ class AssetListViewModel @Inject constructor(
                         val subLocation = currentId?.let { id -> state.rooms.find { it.id == id } }
                             ?: LocationSummary(
                                 id = -2L,
-                                name = "Missing",
+                                name = "Not Assigned",
                                 description = null,
                                 assetCount = 0,
                                 parentId = null,
                                 hasChildren = false,
-                                locationCode = "MISSING"
+                                locationCode = "NOT_ASSIGNED"
                             )
                         SubGroup(subLocation, subAssets)
                     }
@@ -265,12 +265,12 @@ class AssetListViewModel @Inject constructor(
                     val location = currentId?.let { id -> state.rooms.find { it.id == id } }
                         ?: LocationSummary(
                             id = -2L,
-                            name = "Missing",
+                            name = "Not Assigned",
                             description = null,
                             assetCount = 0,
                             parentId = null,
                             hasChildren = false,
-                            locationCode = "MISSING"
+                            locationCode = "NOT_ASSIGNED"
                         )
                     val subGroups = assets.groupBy { it.baseRoomId }.map { (baseId, subAssets) ->
                         val subLocation = baseId?.let { id -> state.rooms.find { it.id == id } }

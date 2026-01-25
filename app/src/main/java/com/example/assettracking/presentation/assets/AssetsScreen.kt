@@ -41,7 +41,6 @@ import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -257,6 +256,58 @@ fun AssetsScreen(
                 },
                 singleLine = true,
                 shape = RoundedCornerShape(12.dp)
+            )
+
+            // Status filter
+            var statusMenuExpanded by remember { mutableStateOf(false) }
+            val statusOptions = listOf("At Home", "Deployed", "Missing", "Not Assigned")
+            ExposedDropdownMenuBox(
+                expanded = statusMenuExpanded,
+                onExpandedChange = { statusMenuExpanded = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+            ) {
+                OutlinedTextField(
+                    value = state.statusFilter ?: "All Statuses",
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Status") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = statusMenuExpanded) },
+                    modifier = Modifier
+                        .menuAnchor()
+                        .fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+                ExposedDropdownMenu(
+                    expanded = statusMenuExpanded,
+                    onDismissRequest = { statusMenuExpanded = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("All Statuses") },
+                        onClick = {
+                            viewModel.onEvent(AssetListEvent.FilterByStatus(null))
+                            statusMenuExpanded = false
+                        }
+                    )
+                    statusOptions.forEach { option ->
+                        DropdownMenuItem(
+                            text = { Text(option) },
+                            onClick = {
+                                viewModel.onEvent(AssetListEvent.FilterByStatus(option))
+                                statusMenuExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
+
+            // Summary count
+            Text(
+                text = "Total assets: ${state.filteredAssets.size}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 16.dp, top = 8.dp, end = 16.dp)
             )
 
             // Grouping Mode Selection
@@ -792,7 +843,7 @@ private fun LocationFilterDialog(
         val query = searchQuery.lowercase()
         location.name.lowercase().contains(query) ||
         location.id.toString().contains(query) ||
-        (location.locationCode?.lowercase()?.contains(query) == true)
+        (location.locationCode.lowercase().contains(query))
     }
 
     AlertDialog(
@@ -853,13 +904,11 @@ private fun LocationFilterDialog(
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
-                                    location.locationCode?.let { code ->
-                                        Text(
-                                            "Code: $code",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
+                                    Text(
+                                        "Code: ${location.locationCode}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
                                 }
                             }
                         }
@@ -1393,7 +1442,7 @@ private fun HierarchicalLocationDialog(
         locations.filter { location ->
             location.name.lowercase().contains(query) ||
             location.id.toString().contains(query) ||
-            (location.locationCode.lowercase().contains(query))
+            location.locationCode.lowercase().contains(query)
         }
     }
 
@@ -1467,7 +1516,85 @@ private fun GroupedCard(
     onPrint: (AssetSummary) -> Unit,
     onRfidWrite: (AssetSummary) -> Unit
 ) {
-    Text("Grouped Card")
+    val groupTitle = group.location?.name ?: if (groupingMode == GroupingMode.BY_BASE_LOCATION) "Unassigned" else "Missing"
+    val groupCode = group.location?.locationCode
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = groupTitle,
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    groupCode?.let {
+                        Text(
+                            text = "Code: $it",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                Text(
+                    text = "${group.assets.size} assets",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            Divider()
+
+            group.subGroups.forEach { sub ->
+                val subTitle = when (groupingMode) {
+                    GroupingMode.BY_BASE_LOCATION -> "Current: ${sub.location?.name ?: "Not Assigned"}"
+                    GroupingMode.BY_CURRENT_LOCATION -> "Base: ${sub.location?.name ?: "Unassigned"}"
+                    GroupingMode.NONE -> sub.location?.name ?: "Unknown"
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = subTitle,
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "${sub.assets.size}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        sub.assets.forEach { asset ->
+                            AssetCard(
+                                asset = asset,
+                                onClick = { onAssetClick(asset.id) },
+                                onEdit = { onEdit(asset) },
+                                onDelete = { onDelete(asset) },
+                                onPrint = { onPrint(asset) },
+                                onRfidWrite = { onRfidWrite(asset) }
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+        }
+    }
 }
 
 // End of file helper
