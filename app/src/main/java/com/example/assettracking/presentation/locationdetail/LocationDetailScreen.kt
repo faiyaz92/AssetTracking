@@ -1,4 +1,4 @@
-@file:OptIn(ExperimentalMaterial3Api::class)
+﻿@file:OptIn(ExperimentalMaterial3Api::class)
 
 package com.example.assettracking.presentation.locationdetail
 
@@ -12,9 +12,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Inventory2
@@ -49,6 +51,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -69,6 +72,7 @@ import com.journeyapps.barcodescanner.ScanOptions
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.assettracking.util.rememberBarcodeImage
+import com.example.assettracking.util.printBarcode
 
 @Composable
 fun LocationDetailScreen(
@@ -78,16 +82,22 @@ fun LocationDetailScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
 
     val (showDeleteDialog, setShowDeleteDialog) = remember { mutableStateOf(false) }
     val (assetToDelete, setAssetToDelete) = remember { mutableStateOf<AssetSummary?>(null) }
+    val (showAddAssetDialog, setShowAddAssetDialog) = remember { mutableStateOf(false) }
 
     val (showRfidDialog, setShowRfidDialog) = remember { mutableStateOf(false) }
     val (showErrorDialog, setShowErrorDialog) = remember { mutableStateOf(false) }
     val (errorDetails, setErrorDetails) = remember { mutableStateOf<Pair<String, String>?>(null) }
 
-    // Add child location dialog state
+    // Child location dialog state
     val (showAddChildDialog, setShowAddChildDialog) = remember { mutableStateOf(false) }
+    val (showEditChildDialog, setShowEditChildDialog) = remember { mutableStateOf(false) }
+    val (childToEdit, setChildToEdit) = remember { mutableStateOf<LocationSummary?>(null) }
+    val (showDeleteChildDialog, setShowDeleteChildDialog) = remember { mutableStateOf(false) }
+    val (childToDelete, setChildToDelete) = remember { mutableStateOf<LocationSummary?>(null) }
 
     LaunchedEffect(state.message) {
         val message = state.message
@@ -167,6 +177,15 @@ fun LocationDetailScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 horizontalAlignment = Alignment.End
             ) {
+                // Add Asset Button (prefills base/current with this location)
+                FloatingActionButton(
+                    onClick = { setShowAddAssetDialog(true) },
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = Color.White
+                ) {
+                    Icon(imageVector = Icons.Default.Add, contentDescription = "Add asset")
+                }
+
                 // Add Child Location Button
                 FloatingActionButton(
                     onClick = { setShowAddChildDialog(true) },
@@ -231,18 +250,29 @@ fun LocationDetailScreen(
                             setAssetToDelete(asset)
                             setShowDeleteDialog(true)
                         },
+                        onPrintAsset = { asset ->
+                            printBarcode(context, asset.id.toString().padStart(6, '0'), asset.name)
+                        },
                         onNavigateToChild = { childId ->
                             // Navigate to child location detail
                             navController.navigate("location_detail/$childId")
                         },
                         onEditChild = { childId ->
-                            // TODO: Implement edit child location
+                            state.locationDetail?.children?.firstOrNull { it.id == childId }?.let { child ->
+                                setChildToEdit(child)
+                                setShowEditChildDialog(true)
+                            }
                         },
                         onDeleteChild = { childId ->
-                            // TODO: Implement delete child location
+                            state.locationDetail?.children?.firstOrNull { it.id == childId }?.let { child ->
+                                setChildToDelete(child)
+                                setShowDeleteChildDialog(true)
+                            }
                         },
                         onPrintChild = { childId ->
-                            // TODO: Implement print child location barcode
+                            state.locationDetail?.children?.firstOrNull { it.id == childId }?.let { child ->
+                                printBarcode(context, child.id.toString().padStart(6, '0'), child.name)
+                            }
                         }
                     )
                 }
@@ -276,6 +306,77 @@ fun LocationDetailScreen(
                     setShowDeleteDialog(false)
                     setAssetToDelete(null)
                 }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    if (showAddAssetDialog) {
+        var assetName by remember { mutableStateOf("") }
+        var assetDetails by remember { mutableStateOf("") }
+        var assetCondition by remember { mutableStateOf("") }
+
+        AlertDialog(
+            onDismissRequest = { setShowAddAssetDialog(false) },
+            title = { Text("Add Asset to this Location") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedTextField(
+                        value = assetName,
+                        onValueChange = { assetName = it },
+                        label = { Text("Asset name") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = TextFieldDefaults.outlinedTextFieldColors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        )
+                    )
+                    OutlinedTextField(
+                        value = assetDetails,
+                        onValueChange = { assetDetails = it },
+                        label = { Text("Details (optional)") },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = TextFieldDefaults.outlinedTextFieldColors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        )
+                    )
+                    OutlinedTextField(
+                        value = assetCondition,
+                        onValueChange = { assetCondition = it },
+                        label = { Text("Condition (optional)") },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = TextFieldDefaults.outlinedTextFieldColors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        )
+                    )
+                    Text(
+                        "Base and current location will be preset to this location.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.createAssetForLocation(
+                            assetName,
+                            assetDetails.takeIf { it.isNotBlank() },
+                            assetCondition.takeIf { it.isNotBlank() }
+                        )
+                        setShowAddAssetDialog(false)
+                    },
+                    enabled = assetName.isNotBlank()
+                ) {
+                    Text("Add Asset")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { setShowAddAssetDialog(false) }) {
                     Text("Cancel")
                 }
             }
@@ -328,7 +429,7 @@ fun LocationDetailScreen(
                                 )
                                 state.scannedRfidTags.takeLast(3).forEach { tag ->
                                     Text(
-                                        "• $tag",
+                                        "ÔÇó $tag",
                                         style = MaterialTheme.typography.bodySmall,
                                         fontFamily = FontFamily.Monospace,
                                         color = MaterialTheme.colorScheme.secondary
@@ -339,7 +440,7 @@ fun LocationDetailScreen(
                     } else if (state.scanCompleted && state.scannedRfidTags.isEmpty()) {
                         Column {
                             Text(
-                                "✓ Scan completed",
+                                "Ô£ô Scan completed",
                                 style = MaterialTheme.typography.titleSmall,
                                 color = MaterialTheme.colorScheme.primary
                             )
@@ -376,7 +477,7 @@ fun LocationDetailScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        "✓",
+                                        "Ô£ô",
                                         style = MaterialTheme.typography.titleLarge,
                                         color = MaterialTheme.colorScheme.primary
                                     )
@@ -427,7 +528,7 @@ fun LocationDetailScreen(
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
                                 if (state.scannedRfidTags.size > 1) 
-                                    "✓ Valid tags will be assigned  ✗ Unknown tags will be ignored" 
+                                    "Ô£ô Valid tags will be assigned  Ô£ù Unknown tags will be ignored" 
                                 else 
                                     "Tap to assign this tag:",
                                 style = MaterialTheme.typography.bodySmall,
@@ -485,7 +586,7 @@ fun LocationDetailScreen(
                                             )
                                         } else {
                                             Text(
-                                                text = "⚠ Invalid format - will be ignored",
+                                                text = "ÔÜá Invalid format - will be ignored",
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = MaterialTheme.colorScheme.error
                                             )
@@ -632,6 +733,93 @@ fun LocationDetailScreen(
             }
         )
     }
+
+    if (showEditChildDialog && childToEdit != null) {
+        val childName = remember { mutableStateOf(childToEdit!!.name) }
+        val childDescription = remember { mutableStateOf(childToEdit!!.description ?: "") }
+
+        AlertDialog(
+            onDismissRequest = {
+                setShowEditChildDialog(false)
+                setChildToEdit(null)
+            },
+            title = { Text("Edit Child Location") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedTextField(
+                        value = childName.value,
+                        onValueChange = { childName.value = it },
+                        label = { Text("Location name") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    OutlinedTextField(
+                        value = childDescription.value,
+                        onValueChange = { childDescription.value = it },
+                        label = { Text("Description (optional)") },
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.updateChildLocation(
+                            childToEdit!!.id,
+                            childName.value,
+                            childDescription.value.takeIf { it.isNotBlank() }
+                        )
+                        setShowEditChildDialog(false)
+                        setChildToEdit(null)
+                    },
+                    enabled = childName.value.isNotBlank()
+                ) {
+                    Text("Save")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    setShowEditChildDialog(false)
+                    setChildToEdit(null)
+                }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    if (showDeleteChildDialog && childToDelete != null) {
+        AlertDialog(
+            onDismissRequest = {
+                setShowDeleteChildDialog(false)
+                setChildToDelete(null)
+            },
+            title = { Text("Delete Child Location") },
+            text = {
+                Text("Delete '${childToDelete?.name}'? This cannot be undone.")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.deleteChildLocation(childToDelete!!.id)
+                        setShowDeleteChildDialog(false)
+                        setChildToDelete(null)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    setShowDeleteChildDialog(false)
+                    setChildToDelete(null)
+                }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -646,6 +834,7 @@ private fun LocationDetailContent(
     onToggleGrouping: () -> Unit,
     locationId: Long,
     onDetach: (AssetSummary) -> Unit,
+    onPrintAsset: (AssetSummary) -> Unit,
     onNavigateToChild: (Long) -> Unit,
     onEditChild: (Long) -> Unit,
     onDeleteChild: (Long) -> Unit,
@@ -772,14 +961,17 @@ private fun LocationDetailContent(
             }
         }
 
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            val currentAssets = assets.filter { it.currentRoomId == locationId }
+            val belongingAssets = assets.filter { it.baseRoomId == locationId }
+            val missingAssets = assets.filter { it.baseRoomId == locationId && it.currentRoomId == null }
+            val hasAnyAssets = currentAssets.isNotEmpty() || belongingAssets.isNotEmpty()
+
             if (children.isNotEmpty()) {
-                // Show child locations
                 Text(
                     text = "Child Locations (${children.size})",
                     style = MaterialTheme.typography.titleMedium
                 )
-                Spacer(modifier = Modifier.height(8.dp))
                 ChildLocationList(
                     children = children,
                     onNavigateToChild = onNavigateToChild,
@@ -787,35 +979,120 @@ private fun LocationDetailContent(
                     onDeleteChild = onDeleteChild,
                     onPrintChild = onPrintChild
                 )
-            } else {
-                // Show assets
+            }
+
+            if (hasAnyAssets) {
+                var selectedTab by remember { mutableStateOf(LocationAssetTab.CURRENT) }
+
+                val (selectedAssets, tabTitle) = when (selectedTab) {
+                    LocationAssetTab.CURRENT -> currentAssets to "Current Assets"
+                    LocationAssetTab.BELONGING -> belongingAssets to "Belonging Assets"
+                    LocationAssetTab.MISSING -> missingAssets to "Missing Assets"
+                }
+
+                val currentSelfCount = currentAssets.count { it.baseRoomId == locationId }
+                val currentOtherCount = currentAssets.size - currentSelfCount
+                val belongingAtHome = belongingAssets.count { it.currentRoomId == locationId }
+                val belongingElsewhere = belongingAssets.count { it.currentRoomId != null && it.currentRoomId != locationId }
+                val missingCount = missingAssets.size
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Assets (${assets.size})",
-                        style = MaterialTheme.typography.titleMedium
+                        text = "$tabTitle (${selectedAssets.size})",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
                     )
                     Button(onClick = onToggleGrouping) {
-                        Text(if (isGrouped) "Ungroup" else "Group by Base Location")
+                        Text(if (isGrouped) "Ungroup" else "Group by Base")
                     }
                 }
-                Spacer(modifier = Modifier.height(8.dp))
-                if (assets.isEmpty()) {
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    SummaryTile(
+                        title = "Current",
+                        count = currentAssets.size,
+                        subtitle = "Self: $currentSelfCount | Other: $currentOtherCount",
+                        selected = selectedTab == LocationAssetTab.CURRENT,
+                        onClick = { selectedTab = LocationAssetTab.CURRENT },
+                        modifier = Modifier.weight(1f)
+                    )
+                    SummaryTile(
+                        title = "Belonging",
+                        count = belongingAssets.size,
+                        subtitle = "At home: $belongingAtHome | Other: $belongingElsewhere",
+                        selected = selectedTab == LocationAssetTab.BELONGING,
+                        onClick = { selectedTab = LocationAssetTab.BELONGING },
+                        modifier = Modifier.weight(1f)
+                    )
+                    SummaryTile(
+                        title = "Missing",
+                        count = missingCount,
+                        subtitle = "Current empty",
+                        selected = selectedTab == LocationAssetTab.MISSING,
+                        onClick = { selectedTab = LocationAssetTab.MISSING },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                if (selectedAssets.isEmpty()) {
                     EmptyState(
                         modifier = Modifier.fillMaxSize(),
-                        message = "No assets linked yet. Tap the scan button to add one."
+                        message = "No assets in this view"
                     )
                 } else {
                     if (isGrouped) {
-                        GroupedAssetList(assets = assets, locationId = locationId, onDetach = onDetach)
+                        GroupedAssetList(
+                            assets = selectedAssets,
+                            locationId = locationId,
+                            onDetach = onDetach,
+                            onPrint = onPrintAsset
+                        )
                     } else {
-                        FlatAssetList(assets = assets, onDetach = onDetach)
+                        FlatAssetList(
+                            assets = selectedAssets,
+                            onDetach = onDetach,
+                            onPrint = onPrintAsset
+                        )
                     }
                 }
             }
+        }
+    }
+}
+
+private enum class LocationAssetTab { CURRENT, BELONGING, MISSING }
+
+@Composable
+private fun SummaryTile(
+    title: String,
+    count: Int,
+    subtitle: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val background = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant
+    val borderColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+
+    Card(
+        modifier = modifier
+            .clickable { onClick() },
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = background),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (selected) 6.dp else 2.dp),
+        border = BorderStroke(1.dp, borderColor)
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(title, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
+            Text("$count", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSurface)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -852,6 +1129,7 @@ private fun ChildLocationCard(
     onDelete: () -> Unit,
     onPrint: () -> Unit
 ) {
+    val (showBarcode, setShowBarcode) = remember { mutableStateOf(false) }
     val barcodeBitmap = rememberBarcodeImage(content = location.id.toString().padStart(6, '0'), width = 800, height = 220)
     Card(
         modifier = Modifier
@@ -901,8 +1179,8 @@ private fun ChildLocationCard(
                 }
             }
 
-            // Barcode Image
-            barcodeBitmap?.let { bitmap ->
+            // Barcode Image (hidden by default)
+            if (showBarcode && barcodeBitmap != null) {
                 Spacer(Modifier.height(12.dp))
                 Box(
                     modifier = Modifier
@@ -914,7 +1192,7 @@ private fun ChildLocationCard(
                     contentAlignment = Alignment.Center
                 ) {
                     Image(
-                        bitmap = bitmap,
+                        bitmap = barcodeBitmap,
                         contentDescription = "Location barcode",
                         modifier = Modifier.fillMaxSize()
                     )
@@ -935,6 +1213,19 @@ private fun ChildLocationCard(
                     )
                 ) {
                     Text("View Details")
+                }
+                Spacer(Modifier.width(8.dp))
+                IconButton(
+                    onClick = { setShowBarcode(!showBarcode) },
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.tertiaryContainer)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.QrCode,
+                        contentDescription = if (showBarcode) "Hide barcode" else "Show barcode",
+                        tint = MaterialTheme.colorScheme.onTertiaryContainer
+                    )
                 }
                 Spacer(Modifier.width(8.dp))
                 IconButton(
@@ -983,8 +1274,11 @@ private fun ChildLocationCard(
 @Composable
 private fun AssetInLocationCard(
     asset: AssetSummary,
-    onDetach: () -> Unit
+    onDetach: () -> Unit,
+    onPrint: () -> Unit
 ) {
+    val (showBarcode, setShowBarcode) = remember { mutableStateOf(false) }
+    val barcodeBitmap = rememberBarcodeImage(content = asset.id.toString().padStart(6, '0'), width = 800, height = 220)
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -1079,6 +1373,50 @@ private fun AssetInLocationCard(
                 }
             }
 
+            // Asset Status (match AssetsScreen styling)
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Start,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(
+                            when (asset.status) {
+                                "At Home" -> Color(0xFF10B981).copy(alpha = 0.1f)
+                                "Deployed" -> Color(0xFFF59E0B).copy(alpha = 0.1f)
+                                "Missing" -> Color(0xFFEF4444).copy(alpha = 0.1f)
+                                "Not Assigned" -> Color(0xFF3B82F6).copy(alpha = 0.1f)
+                                else -> Color.Gray.copy(alpha = 0.1f)
+                            }
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "S",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = when (asset.status) {
+                                "At Home" -> Color(0xFF10B981)
+                                "Deployed" -> Color(0xFFF59E0B)
+                                "Missing" -> Color(0xFFEF4444)
+                                "Not Assigned" -> Color(0xFF3B82F6)
+                                else -> Color.Gray
+                            }
+                        )
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = asset.status,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
             // Location Info
             Spacer(Modifier.height(12.dp))
             Row(
@@ -1102,10 +1440,36 @@ private fun AssetInLocationCard(
                 }
                 Spacer(Modifier.width(12.dp))
                 Text(
-                    text = "Base: ${asset.baseRoomName ?: "Unassigned"}",
+                    text = buildString {
+                        append("Base: ")
+                        append(asset.baseRoomName ?: "Unassigned")
+                        if (asset.currentRoomName != null && asset.currentRoomName != asset.baseRoomName) {
+                            append(" | Current: ${asset.currentRoomName}")
+                        }
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+
+            // Barcode (hidden by default)
+            if (showBarcode && barcodeBitmap != null) {
+                Spacer(Modifier.height(12.dp))
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(90.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Image(
+                        bitmap = barcodeBitmap,
+                        contentDescription = "Asset barcode",
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(8.dp)
+                    )
+                }
             }
 
             // Action Button
@@ -1115,6 +1479,32 @@ private fun AssetInLocationCard(
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                IconButton(
+                    onClick = { setShowBarcode(!showBarcode) },
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.tertiaryContainer)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.QrCode,
+                        contentDescription = if (showBarcode) "Hide barcode" else "Show barcode",
+                        tint = MaterialTheme.colorScheme.onTertiaryContainer
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+                IconButton(
+                    onClick = onPrint,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.primaryContainer)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Print,
+                        contentDescription = "Print barcode",
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
                 IconButton(
                     onClick = onDetach,
                     modifier = Modifier
@@ -1146,7 +1536,8 @@ private fun LoadingState(modifier: Modifier) {
 @Composable
 private fun FlatAssetList(
     assets: List<AssetSummary>,
-    onDetach: (AssetSummary) -> Unit
+    onDetach: (AssetSummary) -> Unit,
+    onPrint: (AssetSummary) -> Unit
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -1154,7 +1545,11 @@ private fun FlatAssetList(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         items(assets, key = { it.id }) { asset ->
-            AssetInLocationCard(asset = asset, onDetach = { onDetach(asset) })
+            AssetInLocationCard(
+                asset = asset,
+                onDetach = { onDetach(asset) },
+                onPrint = { onPrint(asset) }
+            )
         }
     }
 }
@@ -1163,7 +1558,8 @@ private fun FlatAssetList(
 private fun GroupedAssetList(
     assets: List<AssetSummary>,
     locationId: Long,
-    onDetach: (AssetSummary) -> Unit
+    onDetach: (AssetSummary) -> Unit,
+    onPrint: (AssetSummary) -> Unit
 ) {
     val grouped = assets.groupBy { it.baseRoomId }
     val sortedKeys = grouped.keys.sortedWith(compareBy<Long?> { if (it == locationId) 0 else 1 }.thenBy { it ?: Long.MAX_VALUE })
@@ -1189,7 +1585,11 @@ private fun GroupedAssetList(
                 )
             }
             items(groupAssets, key = { it.id }) { asset ->
-                AssetInLocationCard(asset = asset, onDetach = { onDetach(asset) })
+                AssetInLocationCard(
+                    asset = asset,
+                    onDetach = { onDetach(asset) },
+                    onPrint = { onPrint(asset) }
+                )
             }
         }
     }

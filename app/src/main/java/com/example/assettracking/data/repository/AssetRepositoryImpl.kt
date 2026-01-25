@@ -41,7 +41,9 @@ class AssetRepositoryImpl @Inject constructor(
             name = name.trim(),
             details = details?.trim(),
             condition = condition?.trim(),
-            baseRoomId = baseRoomId
+            baseRoomId = baseRoomId,
+            // When user picks a base location, keep current in sync so the asset is placed there immediately.
+            currentRoomId = baseRoomId
         )
         assetDao.update(updated)
         return true

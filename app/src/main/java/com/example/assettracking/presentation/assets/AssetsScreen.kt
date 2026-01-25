@@ -2,9 +2,16 @@
 
 package com.example.assettracking.presentation.assets
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,11 +22,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -33,14 +40,12 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Print
+import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -62,49 +67,37 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarColors
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.runtime.rememberCoroutineScope
-import kotlinx.coroutines.launch
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import android.Manifest
-import android.content.pm.PackageManager
-import android.os.Build
-import com.example.assettracking.presentation.tabs.model.GroupingMode
-import com.example.assettracking.presentation.tabs.model.GroupedItem
-import com.example.assettracking.presentation.tabs.model.SubGroup
 import com.example.assettracking.domain.model.AssetSummary
 import com.example.assettracking.domain.model.LocationSummary
 import com.example.assettracking.presentation.tabs.model.AssetListEvent
+import com.example.assettracking.presentation.tabs.model.GroupingMode
+import com.example.assettracking.presentation.tabs.model.GroupedItem
 import com.example.assettracking.presentation.tabs.viewmodel.AssetListViewModel
 import com.example.assettracking.util.C72RfidReader
+import com.example.assettracking.util.RfidHardwareException
 import com.example.assettracking.util.printBarcode
 import com.example.assettracking.util.rememberBarcodeImage
-import java.util.ArrayDeque
-import com.example.assettracking.util.RfidHardwareException
+import kotlinx.coroutines.launch
 
 @Composable
 fun AssetsScreen(
@@ -131,7 +124,7 @@ fun AssetsScreen(
     var showDeleteDialog by remember { mutableStateOf(false) }
     var assetToDelete by remember { mutableStateOf<AssetSummary?>(null) }
 
-    // RFID write related state
+    // RFID state
     var showRfidDialog by remember { mutableStateOf(false) }
     var showRfidConfirmDialog by remember { mutableStateOf(false) }
     var rfidAssetToWrite by remember { mutableStateOf<AssetSummary?>(null) }
@@ -176,45 +169,14 @@ fun AssetsScreen(
 
     Scaffold(
         topBar = {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(
-                        brush = Brush.horizontalGradient(
-                            colors = listOf(
-                                Color(0xFF1E40AF), // Deep Blue
-                                Color(0xFF06B6D4)  // Teal
-                            )
-                        )
-                    )
-            ) {
-                TopAppBar(
-                    title = {
-                        Text(
-                            "Asset Management",
-                            style = MaterialTheme.typography.titleLarge.copy(
-                                fontWeight = FontWeight.Bold
-                            ),
-                            color = Color.White,
-                            textAlign = TextAlign.Center
-                        )
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(
-                                imageVector = Icons.Default.ArrowBack,
-                                contentDescription = "Back",
-                                tint = Color.White
-                            )
-                        }
-                    },
-                    colors = TopAppBarDefaults.smallTopAppBarColors(
-                        containerColor = Color.Transparent,
-                        titleContentColor = Color.White,
-                        navigationIconContentColor = Color.White
-                    )
-                )
-            }
+            TopAppBar(
+                title = { Text("Assets") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                    }
+                }
+            )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
@@ -223,166 +185,194 @@ fun AssetsScreen(
                     editingAsset = null
                     showAssetDialog = true
                 },
-                containerColor = Color(0xFF06B6D4), // Match teal theme
-                contentColor = Color.White,
-                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp)
+                elevation = FloatingActionButtonDefaults.elevation(4.dp)
             ) {
-                Icon(imageVector = Icons.Default.Add, contentDescription = "Add asset")
+                Icon(Icons.Default.Add, contentDescription = "Add Asset")
             }
         }
-    ) { paddingValues ->
+    ) { innerPadding ->
         Column(
             modifier = Modifier
-                .padding(paddingValues)
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
+                .padding(innerPadding)
         ) {
-            // Professional Search Bar
             OutlinedTextField(
                 value = state.searchQuery,
-                onValueChange = { query ->
-                    viewModel.onEvent(AssetListEvent.UpdateSearch(query))
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                label = { Text("Search Assets") },
-                leadingIcon = {
-                    Icon(
-                        Icons.Default.Search,
-                        contentDescription = "Search",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                },
+                onValueChange = { viewModel.onEvent(AssetListEvent.UpdateSearch(it)) },
+                label = { Text("Search assets") },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
                 singleLine = true,
-                shape = RoundedCornerShape(12.dp)
-            )
-
-            // Status filter
-            var statusMenuExpanded by remember { mutableStateOf(false) }
-            val statusOptions = listOf("At Home", "Deployed", "Missing", "Not Assigned")
-            ExposedDropdownMenuBox(
-                expanded = statusMenuExpanded,
-                onExpandedChange = { statusMenuExpanded = it },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-            ) {
-                OutlinedTextField(
-                    value = state.statusFilter ?: "All Statuses",
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Status") },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = statusMenuExpanded) },
-                    modifier = Modifier
-                        .menuAnchor()
-                        .fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                )
-                ExposedDropdownMenu(
-                    expanded = statusMenuExpanded,
-                    onDismissRequest = { statusMenuExpanded = false }
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("All Statuses") },
-                        onClick = {
-                            viewModel.onEvent(AssetListEvent.FilterByStatus(null))
-                            statusMenuExpanded = false
-                        }
-                    )
-                    statusOptions.forEach { option ->
-                        DropdownMenuItem(
-                            text = { Text(option) },
-                            onClick = {
-                                viewModel.onEvent(AssetListEvent.FilterByStatus(option))
-                                statusMenuExpanded = false
-                            }
-                        )
-                    }
-                }
-            }
-
-            // Summary count
-            Text(
-                text = "Total assets: ${state.filteredAssets.size}",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 16.dp, top = 8.dp, end = 16.dp)
-            )
-
-            // Grouping Mode Selection
-            Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp),
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                FilterChip(
-                    selected = state.groupingMode == GroupingMode.NONE,
-                    onClick = { viewModel.onEvent(AssetListEvent.ChangeGroupingMode(GroupingMode.NONE)) },
-                    label = { Text("No Grouping") }
-                )
-                FilterChip(
-                    selected = state.groupingMode == GroupingMode.BY_BASE_LOCATION,
-                    onClick = { viewModel.onEvent(AssetListEvent.ChangeGroupingMode(GroupingMode.BY_BASE_LOCATION)) },
-                    label = { Text("Group by Base Location") }
-                )
-                FilterChip(
-                    selected = state.groupingMode == GroupingMode.BY_CURRENT_LOCATION,
-                    onClick = { viewModel.onEvent(AssetListEvent.ChangeGroupingMode(GroupingMode.BY_CURRENT_LOCATION)) },
-                    label = { Text("Group by Current Location") }
-                )
+                val currentLabel = state.rooms.find { it.id == state.currentLocationFilter }?.name ?: "All Current"
+                val baseLabel = state.rooms.find { it.id == state.baseLocationFilter }?.name ?: "All Base"
+
+                val currentInteraction = remember { MutableInteractionSource() }
+                val baseInteraction = remember { MutableInteractionSource() }
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 56.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable(
+                            interactionSource = currentInteraction,
+                            indication = null,
+                            role = Role.Button
+                        ) { showCurrentLocationDialog = true }
+                ) {
+                    OutlinedTextField(
+                        value = currentLabel,
+                        onValueChange = {},
+                        readOnly = true,
+                        enabled = false,
+                        label = { Text("Current") },
+                        trailingIcon = { Icon(Icons.Default.ArrowForward, contentDescription = "Select current") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = TextFieldDefaults.outlinedTextFieldColors(
+                            disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                            disabledBorderColor = MaterialTheme.colorScheme.outline,
+                            disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 56.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable(
+                            interactionSource = baseInteraction,
+                            indication = null,
+                            role = Role.Button
+                        ) { showBaseLocationDialog = true }
+                ) {
+                    OutlinedTextField(
+                        value = baseLabel,
+                        onValueChange = {},
+                        readOnly = true,
+                        enabled = false,
+                        label = { Text("Base") },
+                        trailingIcon = { Icon(Icons.Default.ArrowForward, contentDescription = "Select base") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = TextFieldDefaults.outlinedTextFieldColors(
+                            disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                            disabledBorderColor = MaterialTheme.colorScheme.outline,
+                            disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    )
+                }
             }
 
-            // Location Filters with Dialogs
-            if (state.rooms.isNotEmpty()) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    // Current Location Filter
-                    Box(modifier = Modifier.weight(1f).clickable { showCurrentLocationDialog = true }) {
-                        OutlinedTextField(
-                            value = state.rooms.find { it.id == state.currentLocationFilter }?.name ?: "All Current Locations",
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text("Current Location") },
-                            trailingIcon = {
-                                Icon(
-                                    Icons.Default.Search,
-                                    contentDescription = "Search locations",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(8.dp),
-                            enabled = false
-                        )
-                    }
+            Spacer(Modifier.height(8.dp))
 
-                    // Base Location Filter
-                    Box(modifier = Modifier.weight(1f).clickable { showBaseLocationDialog = true }) {
-                        OutlinedTextField(
-                            value = state.rooms.find { it.id == state.baseLocationFilter }?.name ?: "All Base Locations",
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text("Base Location") },
-                            trailingIcon = {
-                                Icon(
-                                    Icons.Default.Search,
-                                    contentDescription = "Search locations",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(8.dp),
-                            enabled = false
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                var statusMenuExpanded by remember { mutableStateOf(false) }
+                val statusOptions = listOf("At Home", "Deployed", "Missing", "Not Assigned")
+
+                ExposedDropdownMenuBox(
+                    expanded = statusMenuExpanded,
+                    onExpandedChange = { statusMenuExpanded = it },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    OutlinedTextField(
+                        value = state.statusFilter ?: "All Statuses",
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Status") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = statusMenuExpanded) },
+                        modifier = Modifier
+                            .fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    ExposedDropdownMenu(
+                        expanded = statusMenuExpanded,
+                        onDismissRequest = { statusMenuExpanded = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("All Statuses") },
+                            onClick = {
+                                viewModel.onEvent(AssetListEvent.FilterByStatus(null))
+                                statusMenuExpanded = false
+                            }
                         )
+                        statusOptions.forEach { option ->
+                            DropdownMenuItem(
+                                text = { Text(option) },
+                                onClick = {
+                                    viewModel.onEvent(AssetListEvent.FilterByStatus(option))
+                                    statusMenuExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+
+                var groupingMenuExpanded by remember { mutableStateOf(false) }
+                val groupingOptions = listOf(
+                    "No Grouping" to GroupingMode.NONE,
+                    "Group by Base Location" to GroupingMode.BY_BASE_LOCATION,
+                    "Group by Current Location" to GroupingMode.BY_CURRENT_LOCATION
+                )
+
+                ExposedDropdownMenuBox(
+                    expanded = groupingMenuExpanded,
+                    onExpandedChange = { groupingMenuExpanded = it },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    OutlinedTextField(
+                        value = when (state.groupingMode) {
+                            GroupingMode.NONE -> "No Grouping"
+                            GroupingMode.BY_BASE_LOCATION -> "Group by Base Location"
+                            GroupingMode.BY_CURRENT_LOCATION -> "Group by Current Location"
+                        },
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Grouping") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = groupingMenuExpanded) },
+                        modifier = Modifier
+                            .fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    ExposedDropdownMenu(
+                        expanded = groupingMenuExpanded,
+                        onDismissRequest = { groupingMenuExpanded = false }
+                    ) {
+                        groupingOptions.forEach { (label, mode) ->
+                            DropdownMenuItem(
+                                text = { Text(label) },
+                                onClick = {
+                                    viewModel.onEvent(AssetListEvent.ChangeGroupingMode(mode))
+                                    groupingMenuExpanded = false
+                                }
+                            )
+                        }
                     }
                 }
             }
+
+            Spacer(Modifier.height(8.dp))
+
             when {
                 state.isLoading -> LoadingState(Modifier.fillMaxSize())
                 state.filteredAssets.isEmpty() -> EmptyState(
@@ -476,7 +466,6 @@ fun AssetsScreen(
         }
     }
 
-    // Location Filter Dialogs
     if (showCurrentLocationDialog) {
         LocationFilterDialog(
             title = "Select Current Location",
@@ -538,7 +527,7 @@ fun AssetsScreen(
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
             title = { Text("Delete Asset") },
-            text = { 
+            text = {
                 Text("Are you sure you want to delete '${assetToDelete?.name}'? This action cannot be undone.")
             },
             confirmButton = {
@@ -548,15 +537,13 @@ fun AssetsScreen(
                         showDeleteDialog = false
                         assetToDelete = null
                     },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error
-                    )
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                 ) {
                     Text("Delete")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { 
+                TextButton(onClick = {
                     showDeleteDialog = false
                     assetToDelete = null
                 }) {
@@ -568,7 +555,7 @@ fun AssetsScreen(
 
     if (showRfidDialog && rfidAssetToWrite != null) {
         AlertDialog(
-            onDismissRequest = { 
+            onDismissRequest = {
                 showRfidDialog = false
                 rfidAssetToWrite = null
                 existingRfidData = null
@@ -578,56 +565,38 @@ fun AssetsScreen(
                 Column {
                     Text("Writing RFID tag for asset: ${rfidAssetToWrite?.name}")
                     Text("Asset ID: ${rfidAssetToWrite?.id?.toString()?.padStart(6, '0')}")
-                    Text("")
-                    Text("Please place an RFID tag near the device.")
-                    Text("The system will check if the tag already contains data.")
+                    Spacer(Modifier.height(8.dp))
+                    Text("Place an RFID tag near the device.")
                 }
             },
             confirmButton = {
                 Button(onClick = {
                     coroutineScope.launch {
-                        // Read existing tag data first
+                        val assetId = rfidAssetToWrite?.id?.toString()?.padStart(6, '0') ?: return@launch
                         try {
                             val existingData = c72RfidReader.readTag()
-                            existingRfidData = existingData
-
-                            if (existingData != null) {
-                                // Tag has data - show confirmation dialog
-                                showRfidDialog = false
+                            if (!existingData.isNullOrBlank() && existingData != assetId) {
+                                existingRfidData = existingData
                                 showRfidConfirmDialog = true
                             } else {
-                                // Tag is blank - write directly
-                                val success = c72RfidReader.writeTag(rfidAssetToWrite!!.id.toString().padStart(6, '0'))
-                                if (success) {
-                                    snackbarHostState.showSnackbar("RFID tag written successfully")
-                                } else {
-                                    snackbarHostState.showSnackbar("Failed to write RFID tag")
-                                }
+                                c72RfidReader.writeTag(assetId)
+                                snackbarHostState.showSnackbar("RFID tag written successfully")
                                 showRfidDialog = false
                                 rfidAssetToWrite = null
+                                existingRfidData = null
                             }
                         } catch (e: RfidHardwareException) {
-                            val errorMessage = when {
-                                e.message?.contains("not found") == true -> "RFID hardware not detected. Please ensure you're using a device with RFID capabilities."
-                                e.message?.contains("not initialized") == true -> "RFID hardware failed to initialize. Check device connections and try again."
-                                e.message?.contains("permission") == true -> "Permission denied for RFID access. Please grant necessary permissions."
-                                e.message?.contains("connection") == true -> "Failed to connect to RFID module. Check hardware connections."
-                                else -> e.message ?: "RFID hardware error occurred."
-                            }
+                            val errorMessage = "RFID error: ${e.message}"
                             val stackTrace = android.util.Log.getStackTraceString(e)
                             errorDetails = Pair(errorMessage, stackTrace)
                             showErrorDialog = true
                             snackbarHostState.showSnackbar(errorMessage)
-                            showRfidDialog = false
-                            rfidAssetToWrite = null
                         } catch (e: Exception) {
                             val errorMessage = "Unexpected error: ${e.message}"
                             val stackTrace = android.util.Log.getStackTraceString(e)
                             errorDetails = Pair(errorMessage, stackTrace)
                             showErrorDialog = true
                             snackbarHostState.showSnackbar(errorMessage)
-                            showRfidDialog = false
-                            rfidAssetToWrite = null
                         }
                     }
                 }) {
@@ -635,20 +604,12 @@ fun AssetsScreen(
                 }
             },
             dismissButton = {
-                Row {
-                    if (errorDetails != null) {
-                        TextButton(onClick = { showErrorDialog = true }) {
-                            Text("Show Error Details")
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                    }
-                    TextButton(onClick = { 
-                        showRfidDialog = false
-                        rfidAssetToWrite = null
-                        existingRfidData = null
-                    }) {
-                        Text("Cancel")
-                    }
+                TextButton(onClick = {
+                    showRfidDialog = false
+                    rfidAssetToWrite = null
+                    existingRfidData = null
+                }) {
+                    Text("Cancel")
                 }
             }
         )
@@ -656,9 +617,9 @@ fun AssetsScreen(
 
     if (showRfidConfirmDialog && rfidAssetToWrite != null && existingRfidData != null) {
         val isAssetId = existingRfidData == rfidAssetToWrite!!.id.toString().padStart(6, '0')
-        
+
         AlertDialog(
-            onDismissRequest = { 
+            onDismissRequest = {
                 showRfidConfirmDialog = false
                 rfidAssetToWrite = null
                 existingRfidData = null
@@ -667,14 +628,12 @@ fun AssetsScreen(
             text = {
                 Column {
                     if (isAssetId) {
-                        Text("This RFID tag is already attached to this asset!")
+                        Text("This RFID tag is already attached to this asset.")
                         Text("Asset ID: $existingRfidData")
                     } else {
                         Text("This RFID tag contains data: $existingRfidData")
-                        Text("")
-                        Text("Do you want to overwrite it with this asset's ID?")
-                        Text("Asset: ${rfidAssetToWrite?.name}")
-                        Text("New ID: ${rfidAssetToWrite?.id?.toString()?.padStart(6, '0')}")
+                        Spacer(Modifier.height(8.dp))
+                        Text("Overwrite with this asset's ID?")
                     }
                 }
             },
@@ -683,22 +642,10 @@ fun AssetsScreen(
                     Button(onClick = {
                         coroutineScope.launch {
                             try {
-                                // Write directly to overwrite existing data (matching demo pattern)
-                                // No need to kill tag - writeData overwrites automatically
-                                val success = c72RfidReader.writeTag(rfidAssetToWrite!!.id.toString().padStart(6, '0'))
-                                if (success) {
-                                    snackbarHostState.showSnackbar("RFID tag overwritten successfully")
-                                } else {
-                                    snackbarHostState.showSnackbar("Failed to write RFID tag")
-                                }
+                                c72RfidReader.writeTag(rfidAssetToWrite!!.id.toString().padStart(6, '0'))
+                                snackbarHostState.showSnackbar("RFID tag overwritten successfully")
                             } catch (e: RfidHardwareException) {
-                                val errorMessage = when {
-                                    e.message?.contains("not found") == true -> "RFID hardware not detected. Please ensure you're using a device with RFID capabilities."
-                                    e.message?.contains("not initialized") == true -> "RFID hardware failed to initialize. Check device connections and try again."
-                                    e.message?.contains("permission") == true -> "Permission denied for RFID access. Please grant necessary permissions."
-                                    e.message?.contains("connection") == true -> "Failed to connect to RFID module. Check hardware connections."
-                                    else -> e.message ?: "RFID hardware error occurred."
-                                }
+                                val errorMessage = "RFID error: ${e.message}"
                                 val stackTrace = android.util.Log.getStackTraceString(e)
                                 errorDetails = Pair(errorMessage, stackTrace)
                                 showErrorDialog = true
@@ -721,7 +668,7 @@ fun AssetsScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { 
+                TextButton(onClick = {
                     showRfidConfirmDialog = false
                     rfidAssetToWrite = null
                     existingRfidData = null
@@ -732,7 +679,6 @@ fun AssetsScreen(
         )
     }
 
-    // Error Dialog
     if (showErrorDialog && errorDetails != null) {
         AlertDialog(
             onDismissRequest = { showErrorDialog = false },
@@ -763,55 +709,10 @@ fun AssetsScreen(
                 Row {
                     TextButton(onClick = {
                         val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                        val clip = android.content.ClipData.newPlainText("Error Details", "${errorDetails!!.first}\n\nStack Trace:\n${errorDetails!!.second}")
-                        clipboard.setPrimaryClip(clip)
-                        coroutineScope.launch {
-                            snackbarHostState.showSnackbar("Error details copied to clipboard")
-                        }
-                    }) {
-                        Text("Copy Details")
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    TextButton(onClick = { showErrorDialog = false }) {
-                        Text("Close")
-                    }
-                }
-            }
-        )
-    }
-
-    // Error Dialog
-    if (showErrorDialog && errorDetails != null) {
-        AlertDialog(
-            onDismissRequest = { showErrorDialog = false },
-            title = { Text("Error Details") },
-            text = {
-                Column {
-                    Text("An error occurred during RFID operation:")
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = errorDetails!!.first,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text("Full Stack Trace:")
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = errorDetails!!.second,
-                        style = MaterialTheme.typography.bodySmall,
-                        fontFamily = FontFamily.Monospace,
-                        modifier = Modifier
-                            .verticalScroll(rememberScrollState())
-                            .height(200.dp)
-                    )
-                }
-            },
-            confirmButton = {
-                Row {
-                    TextButton(onClick = {
-                        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                        val clip = android.content.ClipData.newPlainText("Error Details", "${errorDetails!!.first}\n\nStack Trace:\n${errorDetails!!.second}")
+                        val clip = android.content.ClipData.newPlainText(
+                            "Error Details",
+                            "${errorDetails!!.first}\n\nStack Trace:\n${errorDetails!!.second}"
+                        )
                         clipboard.setPrimaryClip(clip)
                         coroutineScope.launch {
                             snackbarHostState.showSnackbar("Error details copied to clipboard")
@@ -932,7 +833,8 @@ private fun AssetCardContent(
     onPrint: () -> Unit,
     onRfidWrite: () -> Unit
 ) {
-    val barcodeBitmap = rememberBarcodeImage(content = asset.id.toString(), width = 800, height = 220)
+    var showBarcode by remember { mutableStateOf(false) }
+    val barcodeBitmap = rememberBarcodeImage(content = asset.id.toString().padStart(6, '0'), width = 800, height = 220)
     Column(modifier = Modifier.padding(20.dp)) {
         // Asset Header
         Row(
@@ -959,7 +861,14 @@ private fun AssetCardContent(
                 modifier = Modifier
                     .size(16.dp)
                     .clip(CircleShape)
-                    .background(if (asset.currentRoomId == asset.baseRoomId) Color.Green else Color(0xFFFFA500))
+                    .background(
+                        when {
+                            asset.baseRoomId == null -> Color(0xFF3B82F6) // Unassigned (blue)
+                            asset.currentRoomId == null -> Color(0xFFEF4444) // Missing (red)
+                            asset.currentRoomId != asset.baseRoomId -> Color(0xFFF59E0B) // Deployed (orange)
+                            else -> Color(0xFF10B981) // At home (green)
+                        }
+                    )
             )
         }
 
@@ -1075,8 +984,8 @@ private fun AssetCardContent(
             )
         }
 
-        // Barcode Image
-        barcodeBitmap?.let { bitmap ->
+        // Barcode Image (hidden by default)
+        if (showBarcode && barcodeBitmap != null) {
             Spacer(Modifier.height(16.dp))
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -1084,7 +993,7 @@ private fun AssetCardContent(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 Image(
-                    bitmap = bitmap,
+                    bitmap = barcodeBitmap,
                     contentDescription = "Barcode for ${asset.id.toString().padStart(6, '0')}",
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1101,6 +1010,19 @@ private fun AssetCardContent(
             horizontalArrangement = Arrangement.End,
             verticalAlignment = Alignment.CenterVertically
         ) {
+            IconButton(
+                onClick = { showBarcode = !showBarcode },
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(MaterialTheme.colorScheme.tertiaryContainer)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.QrCode,
+                    contentDescription = if (showBarcode) "Hide barcode" else "Show barcode",
+                    tint = MaterialTheme.colorScheme.onTertiaryContainer
+                )
+            }
+            Spacer(Modifier.width(8.dp))
             IconButton(
                 onClick = onRfidWrite,
                 modifier = Modifier
@@ -1214,6 +1136,7 @@ private fun AssetFormDialog(
     val details = rememberSaveable(initialDetails) { mutableStateOf(initialDetails) }
     val condition = rememberSaveable(initialCondition) { mutableStateOf(initialCondition) }
     val baseRoomId = remember { mutableStateOf(initialBaseRoomId) }
+    val locationFieldInteraction = remember { MutableInteractionSource() }
 
     // Hierarchical location dialog state
     val (showLocationDialog, setShowLocationDialog) = remember { mutableStateOf(false) }
@@ -1257,28 +1180,41 @@ private fun AssetFormDialog(
                 )
                 
                 // Base location selection with hierarchical dialog
-                OutlinedTextField(
-                    value = locations.find { it.id == baseRoomId.value }?.name ?: "No base location",
-                    onValueChange = {},
-                    label = { Text("Base location (optional)") },
-                    readOnly = true,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = TextFieldDefaults.outlinedTextFieldColors(
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                    ),
-                    trailingIcon = {
-                        Icon(
-                            Icons.Default.ArrowBack,
-                            contentDescription = "Select location",
-                            modifier = Modifier.rotate(270f), // Rotate to point down
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    },
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { setShowLocationDialog(true) }
-                )
+                        .heightIn(min = 56.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable(
+                            interactionSource = locationFieldInteraction,
+                            role = Role.Button,
+                            indication = null
+                        ) { setShowLocationDialog(true) }
+                ) {
+                    OutlinedTextField(
+                        value = locations.find { it.id == baseRoomId.value }?.name ?: "No base location",
+                        onValueChange = {},
+                        label = { Text("Base location (optional)") },
+                        readOnly = true,
+                        enabled = false,
+                        interactionSource = locationFieldInteraction,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = TextFieldDefaults.outlinedTextFieldColors(
+                            disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                            disabledBorderColor = MaterialTheme.colorScheme.outline,
+                            disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        ),
+                        trailingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.ArrowForward,
+                                contentDescription = "Select location",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
         },
         confirmButton = {

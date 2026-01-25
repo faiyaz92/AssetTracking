@@ -260,40 +260,107 @@ class AssetListViewModel @Inject constructor(
                 }
             }
             GroupingMode.BY_CURRENT_LOCATION -> {
-                val groups = filteredAssets.groupBy { it.currentRoomId }
-                groups.map { (currentId, assets) ->
-                    val location = currentId?.let { id -> state.rooms.find { it.id == id } }
-                        ?: LocationSummary(
-                            id = -2L,
-                            name = "Not Assigned",
-                            description = null,
-                            assetCount = 0,
-                            parentId = null,
-                            hasChildren = false,
-                            locationCode = "NOT_ASSIGNED"
-                        )
-                    val subGroups = assets.groupBy { it.baseRoomId }.map { (baseId, subAssets) ->
-                        val subLocation = baseId?.let { id -> state.rooms.find { it.id == id } }
+                // Group 1: Assets with a current location (normal grouping)
+                val currentLocationGroups = filteredAssets
+                    .filter { it.currentRoomId != null }
+                    .groupBy { it.currentRoomId }
+                    .map { (currentId, assets) ->
+                        val location = state.rooms.find { it.id == currentId }
                             ?: LocationSummary(
-                                id = -1L,
-                                name = "Unassigned",
+                                id = currentId ?: -10L,
+                                name = "Unknown Location",
                                 description = null,
                                 assetCount = 0,
                                 parentId = null,
                                 hasChildren = false,
-                                locationCode = "UNASSIGNED"
+                                locationCode = "UNKNOWN"
+                            )
+
+                        val subGroups = assets.groupBy { it.baseRoomId }.map { (baseId, subAssets) ->
+                            val subLocation = baseId?.let { id -> state.rooms.find { it.id == id } }
+                                ?: LocationSummary(
+                                    id = -1L,
+                                    name = "Unassigned",
+                                    description = null,
+                                    assetCount = 0,
+                                    parentId = null,
+                                    hasChildren = false,
+                                    locationCode = "UNASSIGNED"
+                                )
+                            SubGroup(subLocation, subAssets)
+                        }
+
+                        GroupedItem(location, assets, subGroups)
+                    }
+
+                // Group 2: Missing — base set, but current location is null
+                val missingAssets = filteredAssets.filter { it.currentRoomId == null && it.baseRoomId != null }
+                val missingGroup = if (missingAssets.isNotEmpty()) {
+                    val missingSubGroups = missingAssets.groupBy { it.baseRoomId }.map { (baseId, subAssets) ->
+                        val subLocation = baseId?.let { id -> state.rooms.find { it.id == id } }
+                            ?: LocationSummary(
+                                id = baseId ?: -20L,
+                                name = "Unknown Base",
+                                description = null,
+                                assetCount = 0,
+                                parentId = null,
+                                hasChildren = false,
+                                locationCode = "UNKNOWN_BASE"
                             )
                         SubGroup(subLocation, subAssets)
                     }
-                    GroupedItem(location, assets, subGroups)
+
+                    GroupedItem(
+                        location = LocationSummary(
+                            id = -2L,
+                            name = "Missing",
+                            description = null,
+                            assetCount = 0,
+                            parentId = null,
+                            hasChildren = false,
+                            locationCode = "MISSING"
+                        ),
+                        assets = missingAssets,
+                        subGroups = missingSubGroups
+                    )
+                } else {
+                    null
+                }
+
+                // Group 3: Unassigned — base location is null (no further subgrouping)
+                val unassignedAssets = filteredAssets.filter { it.baseRoomId == null }
+                val unassignedGroup = if (unassignedAssets.isNotEmpty()) {
+                    GroupedItem(
+                        location = LocationSummary(
+                            id = -3L,
+                            name = "Unassigned",
+                            description = null,
+                            assetCount = 0,
+                            parentId = null,
+                            hasChildren = false,
+                            locationCode = "UNASSIGNED"
+                        ),
+                        assets = unassignedAssets,
+                        subGroups = listOf(SubGroup(null, unassignedAssets))
+                    )
+                } else {
+                    null
+                }
+
+                buildList {
+                    addAll(currentLocationGroups)
+                    missingGroup?.let { add(it) }
+                    unassignedGroup?.let { add(it) }
                 }
             }
         }
 
+        val nonEmptyGroupedData = groupedData.filter { it.assets.isNotEmpty() }
+
         return state.copy(
             filteredAssets = filteredAssets,
             groupedAssets = groupedAssets,
-            groupedData = groupedData
+            groupedData = nonEmptyGroupedData
         )
     }
 }

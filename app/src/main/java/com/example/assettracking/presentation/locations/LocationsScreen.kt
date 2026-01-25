@@ -61,12 +61,14 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.assettracking.domain.model.LocationSummary
 import com.example.assettracking.presentation.tabs.viewmodel.LocationListViewModel
 import com.example.assettracking.presentation.tabs.model.LocationListEvent
 import com.example.assettracking.util.rememberBarcodeImage
+import com.example.assettracking.util.printBarcode
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
 
@@ -78,6 +80,7 @@ fun LocationsScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
 
     LaunchedEffect(state.message) {
         val message = state.message?.text
@@ -341,7 +344,7 @@ fun LocationsScreen(
                                 showDeleteDialog = true
                             },
                             onPrint = {
-                                // TODO: Implement print location barcode
+                                printBarcode(context, room.id.toString().padStart(6, '0'), room.name)
                             }
                         )
                     }
@@ -409,6 +412,7 @@ private fun RoomCard(
     onDelete: () -> Unit,
     onPrint: () -> Unit
 ) {
+    val (showBarcode, setShowBarcode) = remember { mutableStateOf(false) }
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -515,7 +519,7 @@ private fun RoomCard(
 
             // Barcode Image
             val barcodeBitmap = rememberBarcodeImage(content = room.id.toString().padStart(6, '0'), width = 800, height = 220)
-            barcodeBitmap?.let { bitmap ->
+            if (showBarcode && barcodeBitmap != null) {
                 Spacer(Modifier.height(12.dp))
                 Box(
                     modifier = Modifier
@@ -527,7 +531,7 @@ private fun RoomCard(
                     contentAlignment = Alignment.Center
                 ) {
                     Image(
-                        bitmap = bitmap,
+                        bitmap = barcodeBitmap,
                         contentDescription = "Location barcode",
                         modifier = Modifier.fillMaxSize()
                     )
@@ -548,6 +552,19 @@ private fun RoomCard(
                     )
                 ) {
                     Text("View Details")
+                }
+                Spacer(Modifier.width(8.dp))
+                IconButton(
+                    onClick = { setShowBarcode(!showBarcode) },
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.tertiaryContainer)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.QrCodeScanner,
+                        contentDescription = if (showBarcode) "Hide barcode" else "Show barcode",
+                        tint = MaterialTheme.colorScheme.onTertiaryContainer
+                    )
                 }
                 Spacer(Modifier.width(8.dp))
                 IconButton(

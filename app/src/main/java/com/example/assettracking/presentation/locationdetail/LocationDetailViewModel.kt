@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.assettracking.domain.repository.LocationRepository
 import com.example.assettracking.domain.usecase.CreateMovementUseCase
+import com.example.assettracking.domain.usecase.CreateAssetUseCase
 import com.example.assettracking.domain.usecase.DetachAssetFromRoomUseCase
 import com.example.assettracking.domain.usecase.FindAssetByIdUseCase
 import com.example.assettracking.domain.usecase.ObserveRoomDetailUseCase
@@ -31,6 +32,7 @@ class LocationDetailViewModel @Inject constructor(
     private val findAssetByIdUseCase: FindAssetByIdUseCase,
     private val updateCurrentRoomUseCase: UpdateCurrentRoomUseCase,
     private val createMovementUseCase: CreateMovementUseCase,
+    private val createAssetUseCase: CreateAssetUseCase,
     // private val createRoomUseCase: CreateRoomUseCase,
     private val rfidReader: RfidReader,
     private val locationRepository: LocationRepository
@@ -123,6 +125,23 @@ class LocationDetailViewModel @Inject constructor(
         }
     }
 
+    fun createAssetForLocation(name: String, details: String?, condition: String?) {
+        viewModelScope.launch {
+            val currentLocationId = locationId
+            if (currentLocationId == null) {
+                _uiState.update { it.copy(message = UiMessage("Location not loaded yet")) }
+                return@launch
+            }
+
+            val result = createAssetUseCase(name, details, condition, currentLocationId)
+            result.onSuccess {
+                _uiState.update { it.copy(message = UiMessage("Asset created in this location")) }
+            }.onFailure { error ->
+                _uiState.update { it.copy(message = UiMessage(error.message ?: "Unable to create asset")) }
+            }
+        }
+    }
+
     fun createChildLocation(name: String, description: String?) {
         viewModelScope.launch {
             val currentLocationId = locationId
@@ -141,6 +160,41 @@ class LocationDetailViewModel @Inject constructor(
                 _uiState.update { it.copy(message = UiMessage("Child location created successfully")) }
             } catch (e: Exception) {
                 _uiState.update { it.copy(message = UiMessage(e.message ?: "Unable to create child location")) }
+            }
+        }
+    }
+
+    fun updateChildLocation(childId: Long, name: String, description: String?) {
+        viewModelScope.launch {
+            try {
+                val normalized = name.trim()
+                if (normalized.isBlank()) {
+                    _uiState.update { it.copy(message = UiMessage("Location name required")) }
+                    return@launch
+                }
+                val updated = locationRepository.updateLocation(childId, normalized, description?.trim())
+                if (!updated) {
+                    _uiState.update { it.copy(message = UiMessage("Unable to update location")) }
+                } else {
+                    _uiState.update { it.copy(message = UiMessage("Location updated successfully")) }
+                }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(message = UiMessage(e.message ?: "Unable to update location")) }
+            }
+        }
+    }
+
+    fun deleteChildLocation(childId: Long) {
+        viewModelScope.launch {
+            try {
+                val deleted = locationRepository.deleteLocation(childId)
+                if (!deleted) {
+                    _uiState.update { it.copy(message = UiMessage("Unable to delete location")) }
+                } else {
+                    _uiState.update { it.copy(message = UiMessage("Location deleted successfully")) }
+                }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(message = UiMessage(e.message ?: "Unable to delete location")) }
             }
         }
     }
