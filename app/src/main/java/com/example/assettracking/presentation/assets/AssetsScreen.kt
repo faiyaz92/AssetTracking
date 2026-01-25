@@ -78,6 +78,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
@@ -169,14 +170,38 @@ fun AssetsScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Assets") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
-                    }
-                }
-            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        brush = Brush.horizontalGradient(
+                            colors = listOf(
+                                Color(0xFF1E40AF), // Deep Blue
+                                Color(0xFF06B6D4)  // Teal
+                            )
+                        )
+                    )
+            ) {
+                TopAppBar(
+                    title = { 
+                        Text(
+                            "Assets",
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                            color = Color.White
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+                        }
+                    },
+                    colors = androidx.compose.material3.TopAppBarDefaults.smallTopAppBarColors(
+                        containerColor = Color.Transparent,
+                        titleContentColor = Color.White,
+                        navigationIconContentColor = Color.White
+                    )
+                )
+            }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
@@ -331,9 +356,9 @@ fun AssetsScreen(
 
                 var groupingMenuExpanded by remember { mutableStateOf(false) }
                 val groupingOptions = listOf(
-                    "No Grouping" to GroupingMode.NONE,
-                    "Group by Base Location" to GroupingMode.BY_BASE_LOCATION,
-                    "Group by Current Location" to GroupingMode.BY_CURRENT_LOCATION
+                    "None" to GroupingMode.NONE,
+                    "Base Location" to GroupingMode.BY_BASE_LOCATION,
+                    "Current Location" to GroupingMode.BY_CURRENT_LOCATION
                 )
 
                 ExposedDropdownMenuBox(
@@ -343,9 +368,9 @@ fun AssetsScreen(
                 ) {
                     OutlinedTextField(
                         value = when (state.groupingMode) {
-                            GroupingMode.NONE -> "No Grouping"
-                            GroupingMode.BY_BASE_LOCATION -> "Group by Base Location"
-                            GroupingMode.BY_CURRENT_LOCATION -> "Group by Current Location"
+                            GroupingMode.NONE -> "None"
+                            GroupingMode.BY_BASE_LOCATION -> "Base Location"
+                            GroupingMode.BY_CURRENT_LOCATION -> "Current Location"
                         },
                         onValueChange = {},
                         readOnly = true,

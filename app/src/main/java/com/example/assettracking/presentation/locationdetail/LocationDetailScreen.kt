@@ -3,28 +3,46 @@
 package com.example.assettracking.presentation.locationdetail
 
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowForward
-import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Print
+import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.RssFeed
-import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -32,6 +50,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -42,13 +61,14 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -58,13 +78,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.lerp
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import com.example.assettracking.domain.model.AssetSummary
 import com.example.assettracking.domain.model.LocationSummary
 import com.journeyapps.barcodescanner.ScanContract
@@ -73,6 +96,24 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.assettracking.util.rememberBarcodeImage
 import com.example.assettracking.util.printBarcode
+
+private data class FabAction(
+    val label: String,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val containerColor: Color,
+    val onClick: () -> Unit
+)
+
+@Composable
+private fun FabMenuButton(action: FabAction) {
+    ExtendedFloatingActionButton(
+        onClick = action.onClick,
+        containerColor = action.containerColor,
+        contentColor = Color.White,
+        text = { Text(action.label) },
+        icon = { Icon(action.icon, contentDescription = action.label) }
+    )
+}
 
 @Composable
 fun LocationDetailScreen(
@@ -128,7 +169,10 @@ fun LocationDetailScreen(
         }
     }
 
+    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
+
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             Box(
                 modifier = Modifier
@@ -166,63 +210,83 @@ fun LocationDetailScreen(
                         containerColor = Color.Transparent,
                         titleContentColor = Color.White,
                         navigationIconContentColor = Color.White
-                    )
+                    ),
+                    scrollBehavior = scrollBehavior
                 )
             }
         },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         floatingActionButton = {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                horizontalAlignment = Alignment.End
-            ) {
-                // Add Asset Button (prefills base/current with this location)
-                FloatingActionButton(
-                    onClick = { setShowAddAssetDialog(true) },
+            var fabExpanded by remember { mutableStateOf(true) }
+
+            val fabActions = listOf(
+                FabAction(
+                    label = "Add Asset",
+                    icon = Icons.Default.Add,
                     containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = Color.White
-                ) {
-                    Icon(imageVector = Icons.Default.Add, contentDescription = "Add asset")
-                }
-
-                // Add Child Location Button
-                FloatingActionButton(
-                    onClick = { setShowAddChildDialog(true) },
-                    containerColor = Color(0xFF06B6D4), // Teal color
-                    contentColor = Color.White
-                ) {
-                    Icon(imageVector = Icons.Default.Place, contentDescription = "Add child location")
-                }
-
-                // Bulk RFID Scan Button
-                FloatingActionButton(
+                    onClick = { setShowAddAssetDialog(true) }
+                ),
+                FabAction(
+                    label = "Add Child",
+                    icon = Icons.Default.Place,
+                    containerColor = Color(0xFF06B6D4),
+                    onClick = { setShowAddChildDialog(true) }
+                ),
+                FabAction(
+                    label = "Bulk RFID",
+                    icon = Icons.Default.Inventory2,
+                    containerColor = MaterialTheme.colorScheme.secondary,
                     onClick = {
                         viewModel.startBulkRfidScan()
                         setShowRfidDialog(true)
-                    },
-                    containerColor = MaterialTheme.colorScheme.secondary
-                ) {
-                    Icon(imageVector = Icons.Default.Inventory2, contentDescription = "Bulk RFID Scan")
-                }
-
-                // Single RFID Scan Button
-                FloatingActionButton(
+                    }
+                ),
+                FabAction(
+                    label = "Single RFID",
+                    icon = Icons.Default.RssFeed,
+                    containerColor = MaterialTheme.colorScheme.primary,
                     onClick = {
                         viewModel.startSingleRfidScan()
                         setShowRfidDialog(true)
-                    },
-                    containerColor = MaterialTheme.colorScheme.primary
+                    }
+                ),
+                FabAction(
+                    label = "Scan Barcode",
+                    icon = Icons.Default.QrCodeScanner,
+                    containerColor = MaterialTheme.colorScheme.tertiary,
+                    onClick = { scannerLauncher.launch(scanOptions) }
+                )
+            )
+
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalAlignment = Alignment.End
+            ) {
+                AnimatedVisibility(
+                    visible = fabExpanded,
+                    enter = expandVertically(),
+                    exit = shrinkVertically()
                 ) {
-                    Icon(imageVector = Icons.Default.RssFeed, contentDescription = "Single RFID Scan")
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        horizontalAlignment = Alignment.End
+                    ) {
+                        fabActions.forEach { action ->
+                            FabMenuButton(action = action)
+                        }
+                    }
                 }
 
-                // Barcode Scan Button
                 FloatingActionButton(
-                    onClick = { scannerLauncher.launch(scanOptions) },
-                    containerColor = MaterialTheme.colorScheme.tertiary
+                    onClick = { fabExpanded = !fabExpanded },
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = Color.White
                 ) {
-                    Icon(imageVector = Icons.Default.QrCodeScanner, contentDescription = "Scan barcode")
+                    Icon(
+                        imageVector = if (fabExpanded) Icons.Default.Close else Icons.Default.Add,
+                        contentDescription = if (fabExpanded) "Collapse menu" else "Expand menu"
+                    )
                 }
             }
         }
@@ -822,6 +886,7 @@ fun LocationDetailScreen(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun LocationDetailContent(
     modifier: Modifier,
@@ -842,98 +907,137 @@ private fun LocationDetailContent(
 ) {
     val showBarcode = remember { mutableStateOf(false) }
     val barcodeBitmap = rememberBarcodeImage(content = locationId.toString().padStart(6, '0'), width = 800, height = 220)
+    val listState = rememberLazyListState()
+    val density = LocalDensity.current
+    val collapseRangePx = with(density) { 120.dp.toPx() }
+    val collapseFraction by remember {
+        derivedStateOf {
+            val rawFraction = if (listState.firstVisibleItemIndex > 0) {
+                1f
+            } else {
+                listState.firstVisibleItemScrollOffset / collapseRangePx
+            }
+            rawFraction.coerceIn(0f, 1f)
+        }
+    }
+    val headerHeight = lerp(164.dp, 120.dp, collapseFraction) // match Locations header max height
+    val headerPadding = lerp(24.dp, 16.dp, collapseFraction) // match Locations header padding
 
-    Column(modifier = modifier) {
-        // Professional Header
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    brush = Brush.horizontalGradient(
-                        colors = listOf(
-                            MaterialTheme.colorScheme.primary,
-                            MaterialTheme.colorScheme.secondary
+    val currentAssets = assets.filter { it.currentRoomId == locationId }
+    val belongingAssets = assets.filter { it.baseRoomId == locationId }
+    val missingAssets = assets.filter { it.baseRoomId == locationId && it.currentRoomId == null }
+    val hasAnyAssets = currentAssets.isNotEmpty() || belongingAssets.isNotEmpty()
+
+    var selectedTab by remember { mutableStateOf(LocationAssetTab.CURRENT) }
+
+    val (selectedAssets, tabTitle) = when (selectedTab) {
+        LocationAssetTab.CURRENT -> currentAssets to "Current Assets"
+        LocationAssetTab.BELONGING -> belongingAssets to "Belonging Assets"
+        LocationAssetTab.MISSING -> missingAssets to "Missing Assets"
+    }
+
+    val currentSelfCount = currentAssets.count { it.baseRoomId == locationId }
+    val currentOtherCount = currentAssets.size - currentSelfCount
+    val belongingAtHome = belongingAssets.count { it.currentRoomId == locationId }
+    val belongingElsewhere = belongingAssets.count { it.currentRoomId != null && it.currentRoomId != locationId }
+    val missingCount = missingAssets.size
+
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        state = listState,
+        contentPadding = PaddingValues(bottom = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        stickyHeader {
+            // Professional Header
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(headerHeight)
+                    .background(
+                        brush = Brush.horizontalGradient(
+                            colors = listOf(
+                                MaterialTheme.colorScheme.primary,
+                                MaterialTheme.colorScheme.secondary
+                            )
                         )
                     )
-                )
-                .padding(24.dp)
-        ) {
-            Column {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Top
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            locationName,
-                            style = MaterialTheme.typography.headlineMedium.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            "Code: $locationCode",
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        locationDescription?.takeIf { it.isNotBlank() }?.let { description ->
+                    .padding(headerPadding)
+            ) {
+                Column {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                description,
-                                style = MaterialTheme.typography.bodyLarge.copy(
-                                    color = Color.White.copy(alpha = 0.9f)
+                                locationName,
+                                style = MaterialTheme.typography.headlineMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                "Code: $locationCode",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
                                 )
                             )
                             Spacer(modifier = Modifier.height(8.dp))
+                            locationDescription?.takeIf { it.isNotBlank() }?.let { description ->
+                                Text(
+                                    description,
+                                    style = MaterialTheme.typography.bodyLarge.copy(
+                                        color = Color.White.copy(alpha = 0.9f)
+                                    )
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                            }
+                            Text(
+                                if (children.isNotEmpty()) "Manage child locations" else "Manage assets in this location",
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    color = Color.White.copy(alpha = 0.8f)
+                                )
+                            )
                         }
-                        Text(
-                            if (children.isNotEmpty()) "Manage child locations" else "Manage assets in this location",
-                            style = MaterialTheme.typography.bodyMedium.copy(
-                                color = Color.White.copy(alpha = 0.8f)
+                        // Barcode toggle icon
+                        IconButton(
+                            onClick = { showBarcode.value = !showBarcode.value },
+                            modifier = Modifier
+                                .size(40.dp)
+                                .background(
+                                    Color.White.copy(alpha = 0.2f),
+                                    RoundedCornerShape(8.dp)
+                                )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.QrCode,
+                                contentDescription = if (showBarcode.value) "Hide barcode" else "Show barcode",
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp)
                             )
-                        )
-                    }
-                    // Barcode toggle icon
-                    IconButton(
-                        onClick = { showBarcode.value = !showBarcode.value },
-                        modifier = Modifier
-                            .size(40.dp)
-                            .background(
-                                Color.White.copy(alpha = 0.2f),
-                                RoundedCornerShape(8.dp)
-                            )
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.QrCode,
-                            contentDescription = if (showBarcode.value) "Hide barcode" else "Show barcode",
-                            tint = Color.White,
-                            modifier = Modifier.size(24.dp)
-                        )
+                        }
                     }
                 }
             }
         }
 
-        // Barcode Display Section
         if (showBarcode.value && barcodeBitmap != null) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color.White)
-                    .padding(16.dp),
-                contentAlignment = Alignment.Center
-            ) {
+            item {
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
                     shape = RoundedCornerShape(12.dp),
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Column(
-                        modifier = Modifier.padding(16.dp),
+                        modifier = Modifier
+                            .background(Color.White)
+                            .padding(16.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
@@ -961,43 +1065,33 @@ private fun LocationDetailContent(
             }
         }
 
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            val currentAssets = assets.filter { it.currentRoomId == locationId }
-            val belongingAssets = assets.filter { it.baseRoomId == locationId }
-            val missingAssets = assets.filter { it.baseRoomId == locationId && it.currentRoomId == null }
-            val hasAnyAssets = currentAssets.isNotEmpty() || belongingAssets.isNotEmpty()
-
-            if (children.isNotEmpty()) {
+        if (children.isNotEmpty()) {
+            item {
                 Text(
                     text = "Child Locations (${children.size})",
-                    style = MaterialTheme.typography.titleMedium
-                )
-                ChildLocationList(
-                    children = children,
-                    onNavigateToChild = onNavigateToChild,
-                    onEditChild = onEditChild,
-                    onDeleteChild = onDeleteChild,
-                    onPrintChild = onPrintChild
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(horizontal = 16.dp)
                 )
             }
+            items(children, key = { it.id }) { child ->
+                ChildLocationCard(
+                    location = child,
+                    onClick = { onNavigateToChild(child.id) },
+                    onEdit = { onEditChild(child.id) },
+                    onDelete = { onDeleteChild(child.id) },
+                    onPrint = { onPrintChild(child.id) },
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+        }
 
-            if (hasAnyAssets) {
-                var selectedTab by remember { mutableStateOf(LocationAssetTab.CURRENT) }
-
-                val (selectedAssets, tabTitle) = when (selectedTab) {
-                    LocationAssetTab.CURRENT -> currentAssets to "Current Assets"
-                    LocationAssetTab.BELONGING -> belongingAssets to "Belonging Assets"
-                    LocationAssetTab.MISSING -> missingAssets to "Missing Assets"
-                }
-
-                val currentSelfCount = currentAssets.count { it.baseRoomId == locationId }
-                val currentOtherCount = currentAssets.size - currentSelfCount
-                val belongingAtHome = belongingAssets.count { it.currentRoomId == locationId }
-                val belongingElsewhere = belongingAssets.count { it.currentRoomId != null && it.currentRoomId != locationId }
-                val missingCount = missingAssets.size
-
+        if (hasAnyAssets) {
+            item {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -1010,57 +1104,69 @@ private fun LocationDetailContent(
                         Text(if (isGrouped) "Ungroup" else "Group by Base")
                     }
                 }
+            }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+            item {
+                val tiles = listOf(
+                    Triple("Current", currentAssets.size, "Self: $currentSelfCount | Other: $currentOtherCount") to LocationAssetTab.CURRENT,
+                    Triple("Belonging", belongingAssets.size, "At home: $belongingAtHome | Other: $belongingElsewhere") to LocationAssetTab.BELONGING,
+                    Triple("Missing", missingCount, "Current empty") to LocationAssetTab.MISSING
+                )
+
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.padding(horizontal = 16.dp)
                 ) {
-                    SummaryTile(
-                        title = "Current",
-                        count = currentAssets.size,
-                        subtitle = "Self: $currentSelfCount | Other: $currentOtherCount",
-                        selected = selectedTab == LocationAssetTab.CURRENT,
-                        onClick = { selectedTab = LocationAssetTab.CURRENT },
-                        modifier = Modifier.weight(1f)
-                    )
-                    SummaryTile(
-                        title = "Belonging",
-                        count = belongingAssets.size,
-                        subtitle = "At home: $belongingAtHome | Other: $belongingElsewhere",
-                        selected = selectedTab == LocationAssetTab.BELONGING,
-                        onClick = { selectedTab = LocationAssetTab.BELONGING },
-                        modifier = Modifier.weight(1f)
-                    )
-                    SummaryTile(
-                        title = "Missing",
-                        count = missingCount,
-                        subtitle = "Current empty",
-                        selected = selectedTab == LocationAssetTab.MISSING,
-                        onClick = { selectedTab = LocationAssetTab.MISSING },
-                        modifier = Modifier.weight(1f)
-                    )
+                    tiles.chunked(2).forEach { rowItems ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            rowItems.forEach { (data, tab) ->
+                                SummaryTile(
+                                    title = data.first,
+                                    count = data.second,
+                                    subtitle = data.third,
+                                    selected = selectedTab == tab,
+                                    onClick = { selectedTab = tab },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            if (rowItems.size == 1) {
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
+                        }
+                    }
                 }
+            }
 
-                if (selectedAssets.isEmpty()) {
+            if (selectedAssets.isEmpty()) {
+                item {
                     EmptyState(
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
                         message = "No assets in this view"
                     )
-                } else {
-                    if (isGrouped) {
-                        GroupedAssetList(
-                            assets = selectedAssets,
-                            locationId = locationId,
-                            onDetach = onDetach,
-                            onPrint = onPrintAsset
-                        )
-                    } else {
-                        FlatAssetList(
-                            assets = selectedAssets,
-                            onDetach = onDetach,
-                            onPrint = onPrintAsset
-                        )
-                    }
+                }
+            } else if (isGrouped) {
+                item {
+                    GroupedAssetList(
+                        assets = selectedAssets,
+                        locationId = locationId,
+                        onDetach = onDetach,
+                        onPrint = onPrintAsset,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+                }
+            } else {
+                items(selectedAssets, key = { it.id }) { asset ->
+                    AssetInLocationCard(
+                        asset = asset,
+                        onDetach = { onDetach(asset) },
+                        onPrint = { onPrintAsset(asset) },
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
                 }
             }
         }
@@ -1098,41 +1204,18 @@ private fun SummaryTile(
 }
 
 @Composable
-private fun ChildLocationList(
-    children: List<LocationSummary>,
-    onNavigateToChild: (Long) -> Unit,
-    onEditChild: (Long) -> Unit,
-    onDeleteChild: (Long) -> Unit,
-    onPrintChild: (Long) -> Unit
-) {
-    LazyColumn(
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-        contentPadding = PaddingValues(bottom = 16.dp)
-    ) {
-        items(children) { child ->
-            ChildLocationCard(
-                location = child,
-                onClick = { onNavigateToChild(child.id) },
-                onEdit = { onEditChild(child.id) },
-                onDelete = { onDeleteChild(child.id) },
-                onPrint = { onPrintChild(child.id) }
-            )
-        }
-    }
-}
-
-@Composable
 private fun ChildLocationCard(
     location: LocationSummary,
     onClick: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
-    onPrint: () -> Unit
+    onPrint: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val (showBarcode, setShowBarcode) = remember { mutableStateOf(false) }
     val barcodeBitmap = rememberBarcodeImage(content = location.id.toString().padStart(6, '0'), width = 800, height = 220)
     Card(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(16.dp),
@@ -1275,12 +1358,13 @@ private fun ChildLocationCard(
 private fun AssetInLocationCard(
     asset: AssetSummary,
     onDetach: () -> Unit,
-    onPrint: () -> Unit
+    onPrint: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val (showBarcode, setShowBarcode) = remember { mutableStateOf(false) }
     val barcodeBitmap = rememberBarcodeImage(content = asset.id.toString().padStart(6, '0'), width = 800, height = 220)
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
@@ -1534,39 +1618,18 @@ private fun LoadingState(modifier: Modifier) {
 }
 
 @Composable
-private fun FlatAssetList(
-    assets: List<AssetSummary>,
-    onDetach: (AssetSummary) -> Unit,
-    onPrint: (AssetSummary) -> Unit
-) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        items(assets, key = { it.id }) { asset ->
-            AssetInLocationCard(
-                asset = asset,
-                onDetach = { onDetach(asset) },
-                onPrint = { onPrint(asset) }
-            )
-        }
-    }
-}
-
-@Composable
 private fun GroupedAssetList(
     assets: List<AssetSummary>,
     locationId: Long,
     onDetach: (AssetSummary) -> Unit,
-    onPrint: (AssetSummary) -> Unit
+    onPrint: (AssetSummary) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val grouped = assets.groupBy { it.baseRoomId }
     val sortedKeys = grouped.keys.sortedWith(compareBy<Long?> { if (it == locationId) 0 else 1 }.thenBy { it ?: Long.MAX_VALUE })
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+    Column(
+        modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         for (baseRoomId in sortedKeys) {
@@ -1577,14 +1640,12 @@ private fun GroupedAssetList(
                 val roomName = groupAssets.firstOrNull()?.baseRoomName ?: "Unassigned"
                 "$roomName Assets"
             }
-            items(listOf(headerText)) { header ->
-                Text(
-                    text = header,
-                    style = MaterialTheme.typography.titleSmall,
-                    modifier = Modifier.padding(vertical = 8.dp)
-                )
-            }
-            items(groupAssets, key = { it.id }) { asset ->
+            Text(
+                text = headerText,
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.padding(vertical = 8.dp)
+            )
+            groupAssets.forEach { asset ->
                 AssetInLocationCard(
                     asset = asset,
                     onDetach = { onDetach(asset) },
