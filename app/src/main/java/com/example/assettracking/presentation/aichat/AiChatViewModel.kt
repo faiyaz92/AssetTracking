@@ -74,68 +74,26 @@ class AiChatViewModel @Inject constructor(
     )
 
     private val schemaPrompt = """
-        You are an AI assistant for an Asset Tracking system. The database has the following tables:
+        You are an AI assistant for an Asset Tracking system. Rely on the database schema (tables and columns) to infer intent, even when the user gives very short or vague prompts. Do not limit yourself to the examples; pick the most relevant query based on column meanings.
 
-        1. locations:
-           - id (Long, Primary Key, auto-generate)
-           - name (String)
-           - description (String, nullable)
-           - parentId (Long, nullable) - for hierarchical locations
-           - locationCode (String)
-
-        2. assets:
-           - id (Long, Primary Key, auto-generate)
-           - name (String)
-           - details (String, nullable)
-           - condition (String, nullable)
-           - baseRoomId (Long, nullable, Foreign Key to locations.id)
-           - currentRoomId (Long, nullable, Foreign Key to locations.id)
-
-        3. asset_movements:
-           - id (Long, Primary Key, auto-generate)
-           - assetId (Long, Foreign Key to assets.id)
-           - fromRoomId (Long, nullable, Foreign Key to locations.id)
-           - toRoomId (Long, Foreign Key to locations.id)
-           - condition (String, nullable)
-           - timestamp (Long) - use current timestamp
-
-        4. audits:
-           - id (Long, Primary Key, auto-generate)
-           - name (String)
-           - type (String)
-           - includeChildren (Boolean)
-           - locationId (Long, Foreign Key to locations.id)
-           - createdAt (Long)
-           - finishedAt (Long, nullable)
+        Schema:
+        1) locations: id (PK), name, description?, parentId?, locationCode
+        2) assets: id (PK), name, details?, condition?, baseRoomId?, currentRoomId?
+        3) asset_movements: id (PK), assetId, fromRoomId?, toRoomId, condition?, timestamp
+        4) audits: id (PK), name, type, includeChildren, locationId, createdAt, finishedAt?
 
         Relations:
-        - Assets can have a base location (baseRoomId) and current location (currentRoomId). "Room" here means location.
-        - Locations are hierarchical via parentId.
-        - Asset movements track changes in asset locations.
-        - Audits are performed on locations.
+        - Room == location. Any roomId refers to locations.id. assets.baseRoomId/currentRoomId are location ids.
+        - locations.parentId -> locations.id (hierarchy)
+        - asset_movements links assets and locations (from/to)
+        - audits link to locations
 
-        Capabilities:
-        - Answer questions with SELECT queries.
-        - Perform actions with INSERT, UPDATE, DELETE queries.
-        - For adding assets: INSERT into assets, optionally set baseRoomId/currentRoomId.
-        - For moving assets: UPDATE assets set currentRoomId, and INSERT into asset_movements.
-        - For adding locations: INSERT into locations.
-        - For audits: INSERT into audits.
-        - Use appropriate JOINs for queries with names.
-        - Values in columns can be any string (e.g., location names: 'building A', 'block 1', 'room 101').
-        - If query might return empty, consider alternatives or note that names may vary.
-
-        Short prompts and IDs:
-        - If the user asks "Asset 4?" or similar, interpret it as locating the asset with name or id containing 4.
-        - Default to most relevant intent: locate asset, show location, recent movement.
-        - Keep SQL concise and deterministic; avoid verbose explanations.
-
-        Examples:
-        - "Where is chair007?" -> SELECT * FROM assets WHERE name = 'chair007' JOIN locations on currentRoomId
-        - "Add laptop to room1" -> INSERT into assets (name, currentRoomId) VALUES ('laptop', (SELECT id FROM locations WHERE name = 'room1'))
-        - "Move chair to room2" -> UPDATE assets SET currentRoomId = (SELECT id FROM locations WHERE name = 'room2') WHERE name = 'chair'; INSERT into asset_movements (assetId, fromRoomId, toRoomId, timestamp) VALUES ((SELECT id FROM assets WHERE name = 'chair'), old_room, new_room, strftime('%s','now')*1000)
-        - "List all assets" -> SELECT a.*, l.name as location FROM assets a LEFT JOIN locations l ON a.currentRoomId = l.id
-        - "Add location office" -> INSERT into locations (name) VALUES ('office')
+        Behavior:
+        - Infer intent from schema: locate assets, find locations, show recent movements, create/move assets, add locations, start audits.
+        - Short prompts (e.g., "Asset 4?") should resolve to best-fit queries: match id or name containing the token, include location info and latest movement where relevant.
+        - Use concise, deterministic SQLite. Prefer simple joins to expose human-readable names. If data may be missing, still return a sensible SELECT.
+        - Writes: INSERT/UPDATE/DELETE when the prompt implies action (create/move/change). Reads: SELECT for lookup/list/reporting.
+        - Examples guide style only; they are not limits.
 
         Always respond with one or more valid SQLite queries, separated by semicolons if multiple. No extra text.
     """.trimIndent()
@@ -162,16 +120,25 @@ class AiChatViewModel @Inject constructor(
                               sqlQuery.startsWith("DELETE", ignoreCase = true)
 
                 if (isWrite) {
-                    // For write queries, show in bubble with execute button
-                    val aiMsg = ChatMessage("${messageId}_response", sqlQuery, false, isWriteQuery = true, originalQuery = sqlQuery)
-                    chatMessageDao.insert(ChatMessageEntity(
-                        messageId = aiMsg.id, 
-                        text = sqlQuery, 
-                        isUser = false, 
-                        timestamp = aiMsg.timestamp,
+                    // For write queries, hide raw SQL and show a friendly action card
+                    val displayText = "Action ready. Tap Execute to apply changes."
+                    val aiMsg = ChatMessage(
+                        id = "${messageId}_response",
+                        text = displayText,
+                        isUser = false,
                         isWriteQuery = true,
                         originalQuery = sqlQuery
-                    ))
+                    )
+                    chatMessageDao.insert(
+                        ChatMessageEntity(
+                            messageId = aiMsg.id,
+                            text = displayText,
+                            isUser = false,
+                            timestamp = aiMsg.timestamp,
+                            isWriteQuery = true,
+                            originalQuery = sqlQuery
+                        )
+                    )
                     _uiState.update { it.copy(isLoading = false) }
                 } else {
                     // For read queries, execute immediately
@@ -279,7 +246,7 @@ class AiChatViewModel @Inject constructor(
     }
 
     private fun encodeTable(columns: List<String>, rows: List<List<String>>): String {
-        val header = "__TABLE__"
+        val header = "__TABLE_V1__"
         val colLine = columns.joinToString(separator = "\t")
         val rowLines = rows.joinToString(separator = "\n") { row -> row.joinToString(separator = "\t") }
         return buildString {
@@ -290,13 +257,27 @@ class AiChatViewModel @Inject constructor(
     }
 
     private fun parseTable(text: String): TableData? {
-        if (!text.startsWith("__TABLE__")) return null
+        val isV1 = text.startsWith("__TABLE_V1__")
+        val isLegacy = !isV1 && text.startsWith("__TABLE__")
+        if (!isV1 && !isLegacy) return null
+
         val lines = text.lines()
         if (lines.size < 2) return null
-        val columns = lines[1].split("\t").map { it.ifBlank { "" } }
-        val rows = lines.drop(2).filter { it.isNotEmpty() }.map { line ->
-            line.split("\t").map { it.ifBlank { "" } }
-        }
+
+        val columnLine = lines[1]
+        if (!columnLine.contains('\t')) return null
+
+        val columns = columnLine.split("\t").map { it.ifBlank { "" } }
+        if (columns.isEmpty()) return null
+
+        val rows = lines.drop(2)
+            .filter { it.isNotEmpty() && it.contains('\t') }
+            .mapNotNull { line ->
+                val cells = line.split("\t").map { it.ifBlank { "" } }
+                if (cells.size == columns.size) cells else null
+            }
+
+        if (rows.isEmpty()) return TableData(columns, emptyList())
         return TableData(columns, rows)
     }
 
