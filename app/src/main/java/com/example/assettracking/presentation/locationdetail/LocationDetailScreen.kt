@@ -910,6 +910,7 @@ private fun LocationDetailContent(
     onDeleteChild: (Long) -> Unit,
     onPrintChild: (Long) -> Unit
 ) {
+    val context = LocalContext.current
     val showBarcode = remember { mutableStateOf(false) }
     val barcodeBitmap = rememberBarcodeImage(content = locationId.toString().padStart(6, '0'), width = 800, height = 220)
     val listState = rememberLazyListState()
@@ -1020,22 +1021,42 @@ private fun LocationDetailContent(
                                 )
                             )
                         }
-                        // Barcode toggle icon
-                        IconButton(
-                            onClick = { showBarcode.value = !showBarcode.value },
-                            modifier = Modifier
-                                .size(40.dp)
-                                .background(
-                                    Color.White.copy(alpha = 0.2f),
-                                    RoundedCornerShape(8.dp)
-                                )
+                        // Barcode and Print buttons
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.QrCode,
-                                contentDescription = if (showBarcode.value) "Hide barcode" else "Show barcode",
-                                tint = Color.White,
-                                modifier = Modifier.size(24.dp)
-                            )
+                            IconButton(
+                                onClick = { showBarcode.value = !showBarcode.value },
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .background(
+                                        Color.White.copy(alpha = 0.2f),
+                                        RoundedCornerShape(8.dp)
+                                    )
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.QrCode,
+                                    contentDescription = if (showBarcode.value) "Hide barcode" else "Show barcode",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                            IconButton(
+                                onClick = { printBarcode(context, locationId.toString().padStart(6, '0'), locationName) },
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .background(
+                                        Color.White.copy(alpha = 0.2f),
+                                        RoundedCornerShape(8.dp)
+                                    )
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Print,
+                                    contentDescription = "Print barcode",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -1569,7 +1590,7 @@ private fun AssetInLocationCard(
                         .background(
                             when (asset.status) {
                                 "At Home" -> Color(0xFF10B981).copy(alpha = 0.1f)
-                                "Deployed" -> Color(0xFFF59E0B).copy(alpha = 0.1f)
+                                "At Other Location" -> Color(0xFFF59E0B).copy(alpha = 0.1f)
                                 "Missing" -> Color(0xFFEF4444).copy(alpha = 0.1f)
                                 "Not Assigned" -> Color(0xFF3B82F6).copy(alpha = 0.1f)
                                 else -> Color.Gray.copy(alpha = 0.1f)
@@ -1583,7 +1604,7 @@ private fun AssetInLocationCard(
                             fontWeight = FontWeight.Bold,
                             color = when (asset.status) {
                                 "At Home" -> Color(0xFF10B981)
-                                "Deployed" -> Color(0xFFF59E0B)
+                                "At Other Location" -> Color(0xFFF59E0B)
                                 "Missing" -> Color(0xFFEF4444)
                                 "Not Assigned" -> Color(0xFF3B82F6)
                                 else -> Color.Gray

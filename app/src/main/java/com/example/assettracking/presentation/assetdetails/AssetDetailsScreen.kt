@@ -260,7 +260,7 @@ private fun AssetDetailsContent(
                                     .background(
                                         when (asset.status) {
                                             "At Home" -> Color(0xFF10B981).copy(alpha = 0.1f) // Green
-                                            "Deployed" -> Color(0xFFF59E0B).copy(alpha = 0.1f) // Orange
+                                            "At Other Location" -> Color(0xFFF59E0B).copy(alpha = 0.1f) // Orange
                                             "Missing" -> Color(0xFFEF4444).copy(alpha = 0.1f) // Red
                                             "Not Assigned" -> Color(0xFF3B82F6).copy(alpha = 0.1f) // Blue
                                             else -> Color.Gray.copy(alpha = 0.1f)
@@ -274,7 +274,7 @@ private fun AssetDetailsContent(
                                         fontWeight = FontWeight.Bold,
                                         color = when (asset.status) {
                                             "At Home" -> Color(0xFF10B981) // Green
-                                            "Deployed" -> Color(0xFFF59E0B) // Orange
+                                            "At Other Location" -> Color(0xFFF59E0B) // Orange
                                             "Missing" -> Color(0xFFEF4444) // Red
                                             "Not Assigned" -> Color(0xFF3B82F6) // Blue
                                             else -> Color.Gray

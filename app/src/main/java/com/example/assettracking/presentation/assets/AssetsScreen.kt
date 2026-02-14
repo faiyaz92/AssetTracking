@@ -313,7 +313,7 @@ fun AssetsScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 var statusMenuExpanded by remember { mutableStateOf(false) }
-                val statusOptions = listOf("At Home", "Deployed", "Missing", "Not Assigned")
+                val statusOptions = listOf("At Home", "At Other Location", "Missing", "Not Assigned")
 
                 ExposedDropdownMenuBox(
                     expanded = statusMenuExpanded,
@@ -892,7 +892,7 @@ private fun AssetCardContent(
                         when {
                             asset.baseRoomId == null -> Color(0xFF3B82F6) // Unassigned (blue)
                             asset.currentRoomId == null -> Color(0xFFEF4444) // Missing (red)
-                            asset.currentRoomId != asset.baseRoomId -> Color(0xFFF59E0B) // Deployed (orange)
+                            asset.currentRoomId != asset.baseRoomId -> Color(0xFFF59E0B) // At Other Location (orange)
                             else -> Color(0xFF10B981) // At home (green)
                         }
                     )
@@ -955,7 +955,7 @@ private fun AssetCardContent(
                     .background(
                         when (asset.status) {
                             "At Home" -> Color(0xFF10B981).copy(alpha = 0.1f) // Green
-                            "Deployed" -> Color(0xFFF59E0B).copy(alpha = 0.1f) // Orange
+                            "At Other Location" -> Color(0xFFF59E0B).copy(alpha = 0.1f) // Orange
                             "Missing" -> Color(0xFFEF4444).copy(alpha = 0.1f) // Red
                             "Not Assigned" -> Color(0xFF3B82F6).copy(alpha = 0.1f) // Blue
                             else -> Color.Gray.copy(alpha = 0.1f)
@@ -969,7 +969,7 @@ private fun AssetCardContent(
                         fontWeight = FontWeight.Bold,
                         color = when (asset.status) {
                             "At Home" -> Color(0xFF10B981) // Green
-                            "Deployed" -> Color(0xFFF59E0B) // Orange
+                            "At Other Location" -> Color(0xFFF59E0B) // Orange
                             "Missing" -> Color(0xFFEF4444) // Red
                             "Not Assigned" -> Color(0xFF3B82F6) // Blue
                             else -> Color.Gray

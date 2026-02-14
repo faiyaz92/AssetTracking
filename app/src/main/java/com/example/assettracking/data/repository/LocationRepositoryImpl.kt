@@ -46,7 +46,7 @@ class LocationRepositoryImpl @Inject constructor(
                             val status = when {
                                 tuple.assetBaseRoomId == null -> "Not Assigned"
                                 tuple.assetCurrentRoomId == null -> "Missing"
-                                tuple.assetBaseRoomId != tuple.assetCurrentRoomId -> "Deployed"
+                                tuple.assetBaseRoomId != tuple.assetCurrentRoomId -> "At Other Location"
                                 else -> "At Home"
                             }
                             AssetSummary(
@@ -109,7 +109,7 @@ class LocationRepositoryImpl @Inject constructor(
             val status = when {
                 asset.baseRoomId == null -> "Not Assigned"
                 asset.currentRoomId == null -> "Missing"
-                asset.baseRoomId != asset.currentRoomId -> "Deployed"
+                asset.baseRoomId != asset.currentRoomId -> "At Other Location"
                 else -> "At Home"
             }
             AssetSummary(
