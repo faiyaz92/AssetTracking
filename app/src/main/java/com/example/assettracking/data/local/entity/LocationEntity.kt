@@ -12,5 +12,9 @@ data class LocationEntity(
     @ColumnInfo(name = "name")
     val name: String,
     @ColumnInfo(name = "description")
-    val description: String? = null
+    val description: String? = null,
+    @ColumnInfo(name = "parentId")
+    val parentId: Long? = null,
+    @ColumnInfo(name = "locationCode")
+    val locationCode: String = ""
 )

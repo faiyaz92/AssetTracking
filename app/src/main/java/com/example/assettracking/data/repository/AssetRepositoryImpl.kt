@@ -33,13 +33,17 @@ class AssetRepositoryImpl @Inject constructor(
         assetId: Long,
         name: String,
         details: String?,
-        condition: String?
+        condition: String?,
+        baseRoomId: Long?
     ): Boolean {
         val existing = assetDao.getAssetById(assetId) ?: return false
         val updated = existing.copy(
             name = name.trim(),
             details = details?.trim(),
-            condition = condition?.trim()
+            condition = condition?.trim(),
+            baseRoomId = baseRoomId,
+            // When user picks a base location, keep current in sync so the asset is placed there immediately.
+            currentRoomId = baseRoomId
         )
         assetDao.update(updated)
         return true
@@ -86,25 +90,43 @@ class AssetRepositoryImpl @Inject constructor(
         return true
     }
 
-    private fun AssetWithRoomTuple.toDomainModel(): AssetSummary = AssetSummary(
-        id = assetId,
-        name = assetName,
-        details = assetDetails,
-        condition = assetCondition,
-        baseRoomId = assetBaseRoomId,
-        baseRoomName = baseRoomName,
-        currentRoomId = assetCurrentRoomId,
-        currentRoomName = currentRoomName
-    )
+    private fun AssetWithRoomTuple.toDomainModel(): AssetSummary {
+        val status = when {
+            assetBaseRoomId == null -> "Not Assigned"
+            assetCurrentRoomId == null -> "Missing"
+            assetBaseRoomId != assetCurrentRoomId -> "At Other Location"
+            else -> "At Home"
+        }
+        return AssetSummary(
+            id = assetId,
+            name = assetName,
+            details = assetDetails,
+            condition = assetCondition,
+            status = status,
+            baseRoomId = assetBaseRoomId,
+            baseRoomName = baseRoomName,
+            currentRoomId = assetCurrentRoomId,
+            currentRoomName = currentRoomName
+        )
+    }
 
-    private fun AssetEntity.toDomainModel(): AssetSummary = AssetSummary(
-        id = id,
-        name = name,
-        details = details,
-        condition = condition,
-        baseRoomId = baseRoomId,
-        baseRoomName = null,
-        currentRoomId = currentRoomId,
-        currentRoomName = null
-    )
+    private fun AssetEntity.toDomainModel(): AssetSummary {
+        val status = when {
+            baseRoomId == null -> "Not Assigned"
+            currentRoomId == null -> "Missing"
+            baseRoomId != currentRoomId -> "At Other Location"
+            else -> "At Home"
+        }
+        return AssetSummary(
+            id = id,
+            name = name,
+            details = details,
+            condition = condition,
+            status = status,
+            baseRoomId = baseRoomId,
+            baseRoomName = null,
+            currentRoomId = currentRoomId,
+            currentRoomName = null
+        )
+    }
 }

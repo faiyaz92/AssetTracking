@@ -39,5 +39,7 @@ data class RoomAssetTuple(
     @ColumnInfo(name = "baseRoomName")
     val baseRoomName: String?,
     @ColumnInfo(name = "assetCurrentRoomId")
-    val assetCurrentRoomId: Long
+    val assetCurrentRoomId: Long?,
+    @ColumnInfo(name = "currentRoomName")
+    val currentRoomName: String?
 )

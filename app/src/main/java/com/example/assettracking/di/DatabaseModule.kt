@@ -5,6 +5,7 @@ import androidx.room.Room
 import com.example.assettracking.data.local.AssetTrackingDatabase
 import com.example.assettracking.data.local.dao.AssetDao
 import com.example.assettracking.data.local.dao.AssetMovementDao
+import com.example.assettracking.data.local.dao.AuditDao
 import com.example.assettracking.data.local.dao.LocationDao
 import com.example.assettracking.data.repository.AssetMovementRepositoryImpl
 import com.example.assettracking.domain.repository.AssetMovementRepository
@@ -28,7 +29,12 @@ object DatabaseModule {
             context,
             AssetTrackingDatabase::class.java,
             "asset-tracking.db"
-        ).addMigrations(AssetTrackingDatabase.MIGRATION_1_2).build()
+        ).addMigrations(
+            AssetTrackingDatabase.MIGRATION_1_2,
+            AssetTrackingDatabase.MIGRATION_2_3,
+            AssetTrackingDatabase.MIGRATION_3_4,
+            AssetTrackingDatabase.MIGRATION_4_5
+        ).build()
 
     @Provides
     fun provideLocationDao(database: AssetTrackingDatabase): LocationDao = database.locationDao()
@@ -38,4 +44,7 @@ object DatabaseModule {
 
     @Provides
     fun provideAssetMovementDao(database: AssetTrackingDatabase): AssetMovementDao = database.assetMovementDao()
+
+    @Provides
+    fun provideAuditDao(database: AssetTrackingDatabase): AuditDao = database.auditDao()
 }

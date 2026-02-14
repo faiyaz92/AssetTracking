@@ -2,6 +2,7 @@
 
 package com.example.assettracking.presentation.tabs
 
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,11 +22,13 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Analytics
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material.icons.filled.RssFeed
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -47,20 +50,28 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanOptions
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.runtime.*
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.assettracking.presentation.tabs.HomeViewModel
 import com.example.assettracking.domain.model.LocationSummary
-import com.journeyapps.barcodescanner.ScanContract
-import com.journeyapps.barcodescanner.ScanOptions
 
 data class DashboardItem(
     val title: String,
@@ -74,20 +85,35 @@ data class DashboardItem(
 fun HomeScreen(
     onOpenLocations: () -> Unit,
     onOpenAssets: () -> Unit,
+    onOpenAudit: () -> Unit,
     onOpenAuditTrail: () -> Unit,
     onQuickScan: () -> Unit,
+    onOpenRfidRadar: () -> Unit,
+    onOpenRfidRead: () -> Unit,
+    onOpenRfidWrite: () -> Unit,
+    onOpenDemoApp: () -> Unit,
+    onLocationScanned: (Long) -> Unit = {},
     rooms: List<LocationSummary> = emptyList(),
-    onAssetMoved: (String, Long, String) -> Unit = { _, _, _ -> }
+    onAssetMoved: (String, Long, String) -> Unit = { _, _, _ -> },
+    viewModel: HomeViewModel = hiltViewModel()
 ) {
-    var showQuickScanDialog by remember { mutableStateOf(false) }
+    val showQuickScanDialog = remember { mutableStateOf(false) }
+    val showRfidScanDialog = remember { mutableStateOf(false) }
+    val rfidScanState by viewModel.rfidScanState.collectAsState()
 
-    if (showQuickScanDialog) {
-        QuickScanDialog(
-            rooms = rooms,
-            onDismiss = { showQuickScanDialog = false },
-            onScanComplete = onAssetMoved
-        )
+    val locationScannerLauncher = rememberLauncherForActivityResult(
+        contract = ScanContract()
+    ) { result ->
+        val contents = result.contents
+        if (contents != null) {
+            // Parse the location ID from the barcode (remove padding)
+            val locationId = contents.toLongOrNull()
+            if (locationId != null) {
+                onLocationScanned(locationId)
+            }
+        }
     }
+
     val dashboardItems = listOf(
         DashboardItem(
             title = "Locations",
@@ -128,8 +154,27 @@ fun HomeScreen(
             onClick = onOpenAssets
         ),
         DashboardItem(
+            title = "Audit",
+            subtitle = "Inventory Checks",
+            icon = {
+                Icon(
+                    Icons.Default.CheckCircle,
+                    contentDescription = null,
+                    modifier = Modifier.size(32.dp),
+                    tint = Color.White
+                )
+            },
+            gradient = Brush.verticalGradient(
+                colors = listOf(
+                    Color(0xFF0EA5E9),
+                    Color(0xFF22C55E)
+                )
+            ),
+            onClick = onOpenAudit
+        ),
+        DashboardItem(
             title = "Scan",
-            subtitle = "Quick Access",
+            subtitle = "Barcode Scan",
             icon = {
                 Icon(
                     Icons.Default.QrCodeScanner,
@@ -144,7 +189,54 @@ fun HomeScreen(
                     Color(0xFFEF4444)
                 )
             ),
-            onClick = { showQuickScanDialog = true }
+            onClick = { showQuickScanDialog.value = true }
+        ),
+        DashboardItem(
+            title = "Location Scan",
+            subtitle = "Scan Location Barcode",
+            icon = {
+                Icon(
+                    Icons.Default.Place,
+                    contentDescription = null,
+                    modifier = Modifier.size(32.dp),
+                    tint = Color.White
+                )
+            },
+            gradient = Brush.verticalGradient(
+                colors = listOf(
+                    Color(0xFFEA580C),
+                    Color(0xFFF97316)
+                )
+            ),
+            onClick = {
+                val scanOptions = ScanOptions().apply {
+                    setDesiredBarcodeFormats(ScanOptions.CODE_128)
+                    setPrompt("Scan location barcode")
+                    setCameraId(0)
+                    setBeepEnabled(true)
+                    setOrientationLocked(true)
+                }
+                locationScannerLauncher.launch(scanOptions)
+            }
+        ),
+        DashboardItem(
+            title = "RFID Scan",
+            subtitle = "Quick RFID Access",
+            icon = {
+                Icon(
+                    Icons.Default.RssFeed,
+                    contentDescription = null,
+                    modifier = Modifier.size(32.dp),
+                    tint = Color.White
+                )
+            },
+            gradient = Brush.verticalGradient(
+                colors = listOf(
+                    Color(0xFF7C3AED),
+                    Color(0xFF8B5CF6)
+                )
+            ),
+            onClick = { showRfidScanDialog.value = true }
         ),
         DashboardItem(
             title = "Analytics",
@@ -159,8 +251,8 @@ fun HomeScreen(
             },
             gradient = Brush.verticalGradient(
                 colors = listOf(
-                    Color(0xFF7C3AED),
-                    Color(0xFF8B5CF6)
+                    Color(0xFF059669),
+                    Color(0xFF10B981)
                 )
             ),
             onClick = { /* TODO: Implement analytics */ }
@@ -202,6 +294,82 @@ fun HomeScreen(
                 )
             ),
             onClick = { /* TODO: Implement settings */ }
+        ),
+        DashboardItem(
+            title = "RFID Radar",
+            subtitle = "Live Tag Scanning",
+            icon = {
+                Icon(
+                    Icons.Default.RssFeed,
+                    contentDescription = null,
+                    modifier = Modifier.size(32.dp),
+                    tint = Color.White
+                )
+            },
+            gradient = Brush.verticalGradient(
+                colors = listOf(
+                    Color(0xFFEC4899),
+                    Color(0xFFF472B6)
+                )
+            ),
+            onClick = onOpenRfidRadar
+        ),
+        DashboardItem(
+            title = "Read Tag",
+            subtitle = "RFID Tag Reader",
+            icon = {
+                Icon(
+                    Icons.Default.Analytics,
+                    contentDescription = null,
+                    modifier = Modifier.size(32.dp),
+                    tint = Color.White
+                )
+            },
+            gradient = Brush.verticalGradient(
+                colors = listOf(
+                    Color(0xFF8B5CF6),
+                    Color(0xFFA78BFA)
+                )
+            ),
+            onClick = onOpenRfidRead
+        ),
+        DashboardItem(
+            title = "Write Tag",
+            subtitle = "RFID Tag Writer",
+            icon = {
+                Icon(
+                    Icons.Default.QrCodeScanner,
+                    contentDescription = null,
+                    modifier = Modifier.size(32.dp),
+                    tint = Color.White
+                )
+            },
+            gradient = Brush.verticalGradient(
+                colors = listOf(
+                    Color(0xFF14B8A6),
+                    Color(0xFF5EEAD4)
+                )
+            ),
+            onClick = onOpenRfidWrite
+        ),
+        DashboardItem(
+            title = "Demo App",
+            subtitle = "Chainway C72 Reference",
+            icon = {
+                Icon(
+                    Icons.Default.RssFeed,
+                    contentDescription = null,
+                    modifier = Modifier.size(32.dp),
+                    tint = Color.White
+                )
+            },
+            gradient = Brush.verticalGradient(
+                colors = listOf(
+                    Color(0xFFDB2777),
+                    Color(0xFFF472B6)
+                )
+            ),
+            onClick = onOpenDemoApp
         )
     )
 
@@ -319,6 +487,26 @@ fun HomeScreen(
             }
         }
     }
+
+    // Quick Scan Dialog (Barcode + RFID)
+    if (showQuickScanDialog.value) {
+        QuickScanDialog(
+            rooms = rooms,
+            onDismiss = { showQuickScanDialog.value = false },
+            onScanComplete = onAssetMoved,
+            viewModel = viewModel
+        )
+    }
+
+    // RFID Only Scan Dialog
+    if (showRfidScanDialog.value) {
+        RfidScanDialog(
+            rooms = rooms,
+            onDismiss = { showRfidScanDialog.value = false },
+            onScanComplete = onAssetMoved,
+            viewModel = viewModel
+        )
+    }
 }
 
 @Composable
@@ -382,12 +570,13 @@ private fun DashboardCard(item: DashboardItem) {
 fun QuickScanDialog(
     rooms: List<LocationSummary>,
     onDismiss: () -> Unit,
-    onScanComplete: (String, Long, String) -> Unit
+    onScanComplete: (String, Long, String) -> Unit,
+    viewModel: HomeViewModel
 ) {
-    var scannedCode by remember { mutableStateOf<String?>(null) }
-    var selectedRoomId by remember { mutableStateOf<Long?>(null) }
-    var condition by remember { mutableStateOf("") }
-    var showConditionDialog by remember { mutableStateOf(false) }
+    val scannedCode = remember { mutableStateOf<String?>(null) }
+    val selectedRoomId = remember { mutableStateOf<Long?>(null) }
+    val condition = remember { mutableStateOf("") }
+    val showConditionDialog = remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     val scannerLauncher = rememberLauncherForActivityResult(
@@ -395,8 +584,8 @@ fun QuickScanDialog(
     ) { result ->
         val contents = result.contents
         if (contents != null) {
-            scannedCode = contents
-            showConditionDialog = true
+            scannedCode.value = contents
+            showConditionDialog.value = true
         }
     }
 
@@ -410,22 +599,22 @@ fun QuickScanDialog(
         }
     }
 
-    if (showConditionDialog && scannedCode != null) {
+    if (showConditionDialog.value && scannedCode.value != null) {
         AlertDialog(
             onDismissRequest = { 
-                showConditionDialog = false
-                scannedCode = null
-                selectedRoomId = null
-                condition = ""
+                showConditionDialog.value = false
+                scannedCode.value = null
+                selectedRoomId.value = null
+                condition.value = ""
             },
             title = { Text("Asset Scanned") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Text("Asset Code: $scannedCode")
+                    Text("Asset Code: ${scannedCode.value}")
 
                     OutlinedTextField(
-                        value = condition,
-                        onValueChange = { condition = it },
+                        value = condition.value,
+                        onValueChange = { condition.value = it },
                         label = { Text("Condition Description") },
                         placeholder = { Text("Describe the asset's condition") },
                         modifier = Modifier.fillMaxWidth(),
@@ -447,12 +636,12 @@ fun QuickScanDialog(
                                 .fillMaxWidth()
                                 .padding(vertical = 4.dp)
                                 .clip(RoundedCornerShape(8.dp))
-                                .clickable { selectedRoomId = room.id },
+                                .clickable { selectedRoomId.value = room.id },
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             RadioButton(
-                                selected = selectedRoomId == room.id,
-                                onClick = { selectedRoomId = room.id }
+                                selected = selectedRoomId.value == room.id,
+                                onClick = { selectedRoomId.value = room.id }
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Column {
@@ -468,27 +657,27 @@ fun QuickScanDialog(
             confirmButton = {
                 Button(
                     onClick = {
-                        val roomId = selectedRoomId
+                        val roomId = selectedRoomId.value
                         if (roomId != null) {
-                            onScanComplete(scannedCode!!, roomId, condition)
-                            showConditionDialog = false
-                            scannedCode = null
-                            selectedRoomId = null
-                            condition = ""
+                            onScanComplete(scannedCode.value!!, roomId, condition.value)
+                            showConditionDialog.value = false
+                            scannedCode.value = null
+                            selectedRoomId.value = null
+                            condition.value = ""
                             onDismiss()
                         }
                     },
-                    enabled = selectedRoomId != null
+                    enabled = selectedRoomId.value != null
                 ) {
                     Text("Move Asset")
                 }
             },
             dismissButton = {
                 TextButton(onClick = { 
-                    showConditionDialog = false
-                    scannedCode = null
-                    selectedRoomId = null
-                    condition = ""
+                    showConditionDialog.value = false
+                    scannedCode.value = null
+                    selectedRoomId.value = null
+                    condition.value = ""
                 }) {
                     Text("Cancel")
                 }
@@ -498,7 +687,7 @@ fun QuickScanDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Quick Scan") },
+        title = { Text("Barcode Scan") },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
@@ -511,7 +700,7 @@ fun QuickScanDialog(
                 )
 
                 Button(
-                    onClick = { 
+                    onClick = {
                         scannerLauncher.launch(scanOptions)
                         // Don't dismiss - let condition dialog handle dismissal
                     },
@@ -519,7 +708,7 @@ fun QuickScanDialog(
                 ) {
                     Icon(Icons.Default.QrCodeScanner, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Start Scanning")
+                    Text("Start Barcode Scanning")
                 }
             }
         },
@@ -529,4 +718,267 @@ fun QuickScanDialog(
             }
         }
     )
+}
+
+@Composable
+fun RfidScanDialog(
+    rooms: List<LocationSummary>,
+    onDismiss: () -> Unit,
+    onScanComplete: (String, Long, String) -> Unit,
+    viewModel: HomeViewModel
+) {
+    val scannedCode = remember { mutableStateOf<String?>(null) }
+    val selectedRoomId = remember { mutableStateOf<Long?>(null) }
+    val condition = remember { mutableStateOf("") }
+    val showConditionDialog = remember { mutableStateOf(false) }
+    val showErrorDialog = remember { mutableStateOf(false) }
+    val errorDetails = remember { mutableStateOf<Pair<String, String>?>(null) }
+
+    val rfidScanState by viewModel.rfidScanState.collectAsState()
+
+    if (showConditionDialog.value && scannedCode.value != null) {
+        AlertDialog(
+            onDismissRequest = {
+                showConditionDialog.value = false
+                scannedCode.value = null
+                selectedRoomId.value = null
+                condition.value = ""
+            },
+            title = { Text("RFID Tag Scanned") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Text("RFID Tag: ${scannedCode.value}")
+
+                    OutlinedTextField(
+                        value = condition.value,
+                        onValueChange = { condition.value = it },
+                        label = { Text("Condition Description") },
+                        placeholder = { Text("Describe the asset's condition") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = TextFieldDefaults.outlinedTextFieldColors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                        )
+                    )
+
+                    Text(
+                        "Select destination location:",
+                        style = MaterialTheme.typography.titleSmall
+                    )
+
+                    rooms.forEach { room ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { selectedRoomId.value = room.id },
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = selectedRoomId.value == room.id,
+                                onClick = { selectedRoomId.value = room.id }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text(room.name, style = MaterialTheme.typography.bodyMedium)
+                                room.description?.let {
+                                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val roomId = selectedRoomId.value
+                        if (roomId != null) {
+                            onScanComplete(scannedCode.value!!, roomId, condition.value)
+                            showConditionDialog.value = false
+                            scannedCode.value = null
+                            selectedRoomId.value = null
+                            condition.value = ""
+                            onDismiss()
+                        }
+                    },
+                    enabled = selectedRoomId.value != null
+                ) {
+                    Text("Move Asset")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showConditionDialog.value = false
+                    scannedCode.value = null
+                    selectedRoomId.value = null
+                    condition.value = ""
+                }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Quick RFID Scan") },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    "Scan RFID tags to quickly move assets to different locations",
+                    textAlign = TextAlign.Center
+                )
+
+                when (rfidScanState) {
+                    is HomeViewModel.RfidScanState.Idle -> {
+                        Button(
+                            onClick = { viewModel.startRfidScan() },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.RssFeed, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Start RFID Scanning")
+                        }
+                    }
+                    is HomeViewModel.RfidScanState.Scanning -> {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Scanning for RFID tags...")
+                        }
+                    }
+                    is HomeViewModel.RfidScanState.Success -> {
+                        val tags = (rfidScanState as HomeViewModel.RfidScanState.Success).tags
+                        if (tags.isEmpty()) {
+                            Text("No RFID tags found. Try again.")
+                            Button(
+                                onClick = { viewModel.startRfidScan() },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Scan Again")
+                            }
+                        } else {
+                            Text("Select an asset tag:")
+                            tags.forEach { tag ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickable {
+                                            scannedCode.value = tag
+                                            showConditionDialog.value = true
+                                            viewModel.clearRfidScan()
+                                        },
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    RadioButton(
+                                        selected = false,
+                                        onClick = {
+                                            scannedCode.value = tag
+                                            showConditionDialog.value = true
+                                            viewModel.clearRfidScan()
+                                        }
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Tag: $tag")
+                                }
+                            }
+                        }
+                    }
+                    is HomeViewModel.RfidScanState.Error -> {
+                        val errorState = (rfidScanState as HomeViewModel.RfidScanState.Error)
+                        Text("Scan failed: ${errorState.message}")
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                onClick = {
+                                    errorDetails.value = Pair(errorState.message, errorState.stackTrace)
+                                    showErrorDialog.value = true
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Details")
+                            }
+                            Button(
+                                onClick = { viewModel.startRfidScan() },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Try Again")
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close")
+            }
+        }
+    )
+
+    // Error Details Dialog
+    if (showErrorDialog.value && errorDetails.value != null) {
+        val (message, stackTrace) = errorDetails.value!!
+        val context = LocalContext.current
+
+        AlertDialog(
+            onDismissRequest = { showErrorDialog.value = false },
+            title = { Text("Error Details") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Text("Error Message:", style = MaterialTheme.typography.titleSmall)
+                    Text(message, style = MaterialTheme.typography.bodyMedium)
+
+                    if (stackTrace.isNotEmpty()) {
+                        Text("Stack Trace:", style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            stackTrace,
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp)
+                                .verticalScroll(rememberScrollState())
+                                .background(
+                                    MaterialTheme.colorScheme.surfaceVariant,
+                                    RoundedCornerShape(4.dp)
+                                )
+                                .padding(8.dp)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = {
+                        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                        val clip = android.content.ClipData.newPlainText("Error Details", "Message: $message\n\nStack Trace:\n$stackTrace")
+                        clipboard.setPrimaryClip(clip)
+                        // You could show a toast here if needed
+                    }) {
+                        Text("Copy")
+                    }
+                    TextButton(onClick = { showErrorDialog.value = false }) {
+                        Text("Close")
+                    }
+                }
+            }
+        )
+    }
 }

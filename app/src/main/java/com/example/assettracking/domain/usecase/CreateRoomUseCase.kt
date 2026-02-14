@@ -6,10 +6,10 @@ import javax.inject.Inject
 class CreateRoomUseCase @Inject constructor(
     private val locationRepository: LocationRepository
 ) {
-    suspend operator fun invoke(name: String, description: String?): Result<Long> {
+    suspend operator fun invoke(name: String, description: String?, parentId: Long? = null): Result<Long> {
         val normalized = name.trim()
         if (normalized.isBlank()) return Result.failure(IllegalArgumentException("Location name required"))
-        val id = locationRepository.createLocation(normalized, description?.trim())
+        val id = locationRepository.createLocation(normalized, description?.trim(), parentId)
         return Result.success(id)
     }
 }

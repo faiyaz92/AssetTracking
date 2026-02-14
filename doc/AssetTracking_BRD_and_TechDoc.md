@@ -48,16 +48,23 @@ The Asset Tracking Application is a mobile solution designed for Android devices
 - Users can scan barcodes to assign assets to rooms (updates current location).
 - Assets can be detached from rooms.
 - Base location remains unchanged; current location tracks latest assignment.
+- Assignment includes optional condition tracking for asset state.
 
 #### FR-007: Audit Trail
 - Track all asset movements with timestamps.
 - Audit trail screen shows history of room changes for each asset.
 - Includes from room, to room, and timestamp.
 
+#### FR-008: Quick Asset Movement
+- Quick scan functionality from home screen for rapid asset relocation.
+- Scan barcode, select target location, enter condition, and move asset instantly.
+- Bypasses detailed location screens for efficiency.
+
 #### FR-004: Barcode Generation and Printing
 - Automatic CODE_128 barcode generation for each asset based on its code.
 - Print functionality via Bluetooth-connected 58mm thermal printers.
 - Print layout includes asset name, code, and barcode image.
+- Printed barcodes are used for physical asset labeling and subsequent scanning for assignment.
 
 #### FR-005: Search and Filtering
 - Search assets by name or code.
@@ -89,6 +96,9 @@ The Asset Tracking Application is a mobile solution designed for Android devices
 
 #### US-007: As a user, I want to view the audit trail of asset movements so that I can track history.
 - Acceptance Criteria: Third tile on home screen; list of movements with timestamps.
+
+#### US-008: As a user, I want to quickly move assets between locations so that I can efficiently relocate inventory.
+- Acceptance Criteria: Quick scan button on home screen; scan barcode, select location, enter condition, confirm move.
 
 ### Non-Functional Requirements
 - **Performance**: App should load data quickly (<2s for lists).
@@ -230,14 +240,14 @@ Dependency injection via Hilt. Navigation handled by Compose Navigation.
 1. From RoomsScreen, tap a room to open RoomDetailScreen.
 2. View shows assigned and unassigned assets.
 3. Tap "Scan" to use camera for barcode scan.
-4. On scan success, assign asset to room via AssignAssetToRoom use case.
+4. On scan success, assign asset to room via AssignAssetToRoom use case (with optional condition).
 5. Alternatively, select from unassigned list.
 
 #### Printing Barcode (BRD Ref: FR-004, US-004)
 1. In AssetsScreen, tap print icon on asset row.
-2. Calls printBarcode(context, asset.code, asset.name).
+2. Calls printBarcode(context, asset.id.toString().padStart(6, '0'), asset.name).
 3. Generates bitmap, connects to Bluetooth printer, sends ESC/POS commands.
-4. Prints centered name, code, and barcode image.
+4. Prints centered name, code (padded to 6 digits), and barcode image.
 
 #### Setting Base Location (BRD Ref: FR-002, US-006)
 1. In AssetsScreen, add/edit asset dialog.
@@ -249,5 +259,14 @@ Dependency injection via Hilt. Navigation handled by Compose Navigation.
 1. User taps "Audit Trail" tile on home screen.
 2. Navigates to AuditTrailScreen.
 3. Displays list of AssetMovement with asset name, from/to rooms, timestamp.
+
+#### Quick Asset Movement (BRD Ref: FR-008, US-008)
+1. User taps "Scan" tile on home screen.
+2. Opens QuickScanDialog with scan button.
+3. User scans asset barcode using ZXing scanner.
+4. Dialog shows scanned code, condition input field, and location selector.
+5. User selects target location and enters condition.
+6. Confirms move: Calls AssignAssetToRoomWithCondition use case.
+7. Movement recorded in audit trail.
 
 This documentation provides a complete overview of the application's business and technical aspects. For updates, refer to the codebase files listed.

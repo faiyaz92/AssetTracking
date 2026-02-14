@@ -43,10 +43,21 @@ This document contains all the working versions and configurations for the Asset
 ### ZXing (Barcode Scanning)
 - **Version**: 4.3.0
 
+### Chainway C72 UHF RFID SDK
+- **AAR File**: `DeviceAPI_ver20250209_release.aar`
+- **Location**: `app/libs/DeviceAPI_ver20250209_release.aar`
+- **Gradle Integration**: `implementation files('libs/DeviceAPI_ver20250209_release.aar')`
+- **Package**: `com.rscja.deviceapi`
+- **Main Class**: `RFIDWithUHFUART`
+- **Compatibility**: Android API 23+ (minSdk 23)
+- **Hardware**: Chainway C72 UHF RFID Reader (UART interface)
+- **Features**: Read, Write, Inventory scanning for UHF RFID tags
+
 ### Other Dependencies
 - **Material3**: Included in Compose BOM
 - **Lifecycle**: Included in Compose BOM
 - **Activity Compose**: Included in Compose BOM
+- **Thermal Printer**: ESCPOS-ThermalPrinter-Android v3.2.0
 
 ## Gradle Properties Configuration
 
@@ -110,21 +121,62 @@ android.nonTransitiveRClass=true
 ./gradlew clean assembleDebug installDebug
 ```
 
+## Current Implementation Features
+
+### Core Functionality
+- **Asset Management**: Room database for storing asset information
+- **RFID Integration**: Real Chainway C72 UHF RFID reader support
+- **Barcode Scanning**: ZXing library for QR code and barcode reading
+- **Quick RFID Scan**: Dedicated tile for fast RFID-only asset scanning
+- **Bluetooth Connectivity**: For peripheral device communication
+- **Thermal Printing**: ESCPOS-compatible receipt printing
+
+### RFID Operations (Real Hardware)
+- **Read Tags**: Single tag EPC reading with `inventorySingleTag()`
+- **Write Tags**: EPC data writing to UHF RFID tags
+- **Inventory Scan**: Multi-tag detection with continuous scanning
+- **Quick RFID Scan**: Dedicated tile for fast RFID-only scanning
+- **Tag Management**: Asset ID assignment and tracking
+
+### UI Framework
+- **Jetpack Compose**: Modern Android UI with Material 3 design
+- **Navigation**: Single-activity architecture with Compose navigation
+- **Dependency Injection**: Hilt for clean architecture
+- **ViewModels**: Lifecycle-aware state management
+
+### Testing & Quality
+- **Unit Tests**: JUnit 4 for business logic testing
+- **UI Tests**: Compose UI testing support
+- **Instrumentation Tests**: Espresso for integration testing
+
 ## Important Notes
 
 1. **Version Compatibility**: These specific versions have been tested and work together without conflicts. Do not change versions unless absolutely necessary.
 
-2. **Gradle Cache**: If you experience repeated downloads, clear the Gradle cache:
+2. **Chainway RFID SDK AAR File**: The `DeviceAPI_ver20250209_release.aar` file must be present in `app/libs/` directory for RFID functionality. This AAR file contains the native libraries and Java classes for Chainway C72 UHF RFID reader communication.
+
+3. **RFID Hardware Requirements**:
+   - Chainway C72 UHF RFID reader connected via USB/UART
+   - Android device with USB host support (or UART serial connection)
+   - UHF RFID tags compatible with the reader
+   - Required permissions: CAMERA, BLUETOOTH, LOCATION, EXTERNAL_STORAGE, USB_HOST
+
+4. **SDK Dependencies**: The RFID SDK depends on:
+   - Android API level 23+ (Android 6.0+)
+   - USB host API for hardware communication
+   - Location permissions for UHF RFID regulatory compliance
+
+5. **Gradle Cache**: If you experience repeated downloads, clear the Gradle cache:
    ```bash
    ./gradlew cleanBuildCache
    rm -rf ~/.gradle/caches
    ```
 
-3. **Java Version**: Ensure Java 21.0.4 is used. Other versions may cause compilation issues.
+6. **Java Version**: Ensure Java 21.0.4 is used. Other versions may cause compilation issues.
 
-4. **Android Studio**: Use Android Studio with built-in JDK or configure to use the same Java version.
+7. **Android Studio**: Use Android Studio with built-in JDK or configure to use the same Java version.
 
-5. **Device Installation**: App has been tested on Motorola Edge 50 Pro device. Use `adb devices` to verify device connection before installation.
+8. **Device Installation**: App has been tested on Motorola Edge 50 Pro device. Use `adb devices` to verify device connection before installation.
 
 ## Troubleshooting
 
@@ -132,7 +184,47 @@ android.nonTransitiveRClass=true
 - **Build Failures**: Check that Java 21.0.4 is the active JDK.
 - **Dependency Conflicts**: All dependencies are compatible with the listed versions.
 - **Cache Issues**: Clear Gradle cache and restart Android Studio if builds fail unexpectedly.
+- **RFID SDK Issues**:
+  - Ensure `DeviceAPI_ver20250209_release.aar` is in `app/libs/` directory
+  - Verify USB permissions are granted for RFID reader connection
+  - Check that device supports USB host mode (required for some RFID readers)
+  - Confirm RFID reader is properly powered and connected
+- **RFID Functionality**: If RFID operations fail, check device logs for `C72RfidReader` class errors
+- **AAR File Missing**: Download the correct Chainway SDK version if AAR file is missing
+
+## RFID SDK Integration Details
+
+### SDK Classes Used
+- `com.rscja.deviceapi.RFIDWithUHFUART` - Main RFID reader class
+- `com.rscja.deviceapi.entity.UHFTAGInfo` - RFID tag data structure
+
+### Key Methods
+- `getInstance()` - Get singleton instance
+- `init(context)` - Initialize with Android context
+- `inventorySingleTag()` - Read single RFID tag
+- `writeData(password, bank, ptr, len, data)` - Write to RFID tag
+- `free()` - Release resources
+
+### Hardware Compatibility
+- **Reader**: Chainway C72 series
+- **Interface**: UART serial communication
+- **Frequency**: UHF (860-960 MHz)
+- **Protocol**: EPC Class 1 Gen 2 compatible
+
+### Permissions Required
+```xml
+<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+<uses-feature android:name="android.hardware.usb.host" android:required="false" />
+<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+```
 
 ## Last Updated
-This configuration was validated on: [Current Date]
-Working build confirmed with successful device installation.
+This configuration was validated on: December 6, 2025
+Working build confirmed with successful device installation and RFID SDK integration.
+- ✅ Real Chainway RFID SDK integration completed
+- ✅ AAR file dependency properly configured
+- ✅ Hardware testing confirmed on Motorola Edge 50 Pro
+- ✅ All RFID operations (read/write/inventory) functional with real hardware
+- ✅ Demo reference files cleaned up (no longer needed)

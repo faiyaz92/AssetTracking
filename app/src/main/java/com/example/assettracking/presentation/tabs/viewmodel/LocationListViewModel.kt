@@ -55,9 +55,9 @@ class LocationListViewModel @Inject constructor(
             .launchIn(viewModelScope)
     }
 
-    private fun createRoom(name: String, description: String?) {
+    private fun createRoom(name: String, description: String?, parentId: Long? = null) {
         viewModelScope.launch {
-            val result = createRoomUseCase(name, description)
+            val result = createRoomUseCase(name, description, parentId)
             result.onFailure { error ->
                 _uiState.update { it.copy(message = UiMessage(error.message ?: "Unable to create location")) }
             }
