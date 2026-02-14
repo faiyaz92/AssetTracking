@@ -85,6 +85,9 @@ dependencies {
     // Chainway C72 UHF RFID SDK
     implementation files('libs/DeviceAPI_ver20250209_release.aar')
 
+    // Google AI for Gemini
+    implementation 'com.google.ai.client.generativeai:generativeai:0.2.2'
+
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation composeBom
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'
