@@ -2,6 +2,7 @@ package com.example.assettracking.presentation.aichat
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.sqlite.db.SimpleSQLiteQuery
 import com.example.assettracking.data.local.AssetTrackingDatabase
 import com.example.assettracking.data.local.dao.ChatMessageDao
 import com.example.assettracking.data.local.entity.ChatMessageEntity
@@ -12,6 +13,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 
 data class ChatMessage(
     val id: String,
@@ -29,13 +31,19 @@ data class TableData(
     val rows: List<List<String>>
 )
 
+data class OptionItem(
+    val index: Int,
+    val type: String, // "asset" or "location"
+    val id: Int,
+    val name: String
+)
+
 data class AiChatState(
     val messages: List<ChatMessage> = emptyList(),
     val isLoading: Boolean = false,
     val error: String? = null,
-    val retryCount: Int = 0,
-    val continueCount: Int = 0,
-    val mode: AiMode = AiMode.Gemini
+    val mode: AiMode = AiMode.Gemini,
+    val lastOptions: List<OptionItem> = emptyList()
 )
 
 enum class AiMode { Gemini, Offline }
@@ -48,32 +56,10 @@ class AiChatViewModel @Inject constructor(
 
     private var lastUserMessage: String? = null
 
-    private val fallbackService: LocalSqlFallbackService = LocalSqlFallbackServiceImpl()
+    private val fallbackEngine = LocalSqlFallbackEngine()
 
     private val _uiState = MutableStateFlow(AiChatState())
     val uiState: StateFlow<AiChatState> = _uiState
-
-    init {
-        viewModelScope.launch {
-            chatMessageDao.observeMessages().collect { entities ->
-                val messages = entities.map { entity ->
-                    val table = parseTable(entity.text)
-                    val displayText = table?.let { tbl -> "Query results (${tbl.rows.size} rows)" } ?: entity.text
-                    ChatMessage(
-                        id = entity.messageId,
-                        text = displayText,
-                        isUser = entity.isUser,
-                        timestamp = entity.timestamp,
-                        isWriteQuery = entity.isWriteQuery,
-                        queryExecuted = entity.queryExecuted,
-                        originalQuery = entity.originalQuery,
-                        table = table
-                    )
-                }
-                _uiState.update { it.copy(messages = messages) }
-            }
-        }
-    }
 
     private val generativeModel = GenerativeModel(
         modelName = "gemini-2.5-flash",
@@ -102,8 +88,38 @@ class AiChatViewModel @Inject constructor(
         - Writes: INSERT/UPDATE/DELETE when the prompt implies action (create/move/change). Reads: SELECT for lookup/list/reporting.
         - Examples guide style only; they are not limits.
 
+        Examples:
+        - User: Asset 4?
+          SQL: SELECT a.id, a.name, a.details, a.condition, l.name AS currentLocation, l.locationCode FROM assets a LEFT JOIN locations l ON a.currentRoomId = l.id WHERE a.id = 4;
+        - User: Where is asset 4?
+          SQL: SELECT a.id, a.name, l.name AS location, l.locationCode FROM assets a LEFT JOIN locations l ON a.currentRoomId = l.id WHERE a.id = 4;
+        - User: Move asset 4 to room 5
+          SQL: INSERT INTO asset_movements (assetId, fromRoomId, toRoomId, timestamp) SELECT 4, currentRoomId, 5, strftime('%s','now')*1000 FROM assets WHERE id = 4; UPDATE assets SET currentRoomId = 5 WHERE id = 4;
+
         Always respond with one or more valid SQLite queries, separated by semicolons if multiple. No extra text.
     """.trimIndent()
+
+    init {
+        viewModelScope.launch {
+            chatMessageDao.observeMessages().collect { entities ->
+                val messages = entities.map { entity ->
+                    val table = parseTable(entity.text)
+                    val displayText = table?.let { tbl -> "Query results (${tbl.rows.size} rows)" } ?: entity.text
+                    ChatMessage(
+                        id = entity.messageId,
+                        text = displayText,
+                        isUser = entity.isUser,
+                        timestamp = entity.timestamp,
+                        isWriteQuery = entity.isWriteQuery,
+                        queryExecuted = entity.queryExecuted,
+                        originalQuery = entity.originalQuery,
+                        table = table
+                    )
+                }
+                _uiState.update { it.copy(messages = messages) }
+            }
+        }
+    }
 
     fun sendMessage(userMessage: String) {
         lastUserMessage = userMessage
@@ -114,14 +130,84 @@ class AiChatViewModel @Inject constructor(
             chatMessageDao.insert(ChatMessageEntity(messageId = messageId, text = userMessage, isUser = true, timestamp = userMsg.timestamp))
         }
 
-        _uiState.update { it.copy(isLoading = true, error = null, retryCount = 0, continueCount = 0) }
+        _uiState.update { it.copy(isLoading = true, error = null) }
+
+        // Validation: Single words must be at least 4 characters
+        val trimmed = userMessage.trim()
+        if (trimmed.isNotBlank() && !trimmed.contains(" ") && trimmed.length <= 3) {
+            viewModelScope.launch {
+                val aiMsg = ChatMessage("${System.currentTimeMillis()}_response", "Please provide a more specific query with at least 4 characters.", false)
+                chatMessageDao.insert(ChatMessageEntity(messageId = aiMsg.id, text = aiMsg.text, isUser = false, timestamp = aiMsg.timestamp))
+                _uiState.update { it.copy(isLoading = false) }
+            }
+            return
+        }
+
+        // Check if user is selecting an option (e.g., "1" for first option)
+        val input = userMessage.trim()
+        val selectedIndex = input.toIntOrNull()
+        val currentOptions = _uiState.value.lastOptions
+        if (selectedIndex != null && selectedIndex in 1..currentOptions.size) {
+            val selected = currentOptions[selectedIndex - 1]
+            val detailSql = when (selected.type) {
+                "asset" -> "SELECT a.id, a.name, a.details, a.condition, lb.name AS baseLocation, lc.name AS currentLocation, " +
+                        "CASE WHEN a.currentRoomId IS NULL THEN 'Missing' " +
+                        "WHEN a.currentRoomId = a.baseRoomId THEN 'At Home' ELSE 'At Other Location' END AS status " +
+                        "FROM assets a " +
+                        "LEFT JOIN locations lb ON a.baseRoomId = lb.id " +
+                        "LEFT JOIN locations lc ON a.currentRoomId = lc.id " +
+                        "WHERE a.id = ${selected.id}"
+                "location" -> "WITH loc AS (\n" +
+                    "  SELECT l.id, l.name, l.description, l.parentId, l.locationCode,\n" +
+                    "         (SELECT name FROM locations p WHERE p.id = l.parentId) AS parentName\n" +
+                    "  FROM locations l\n" +
+                    "  WHERE l.id = ${selected.id}\n" +
+                    "), asset_summary AS (\n" +
+                    "  SELECT\n" +
+                    "    SUM(CASE WHEN a.currentRoomId = loc.id THEN 1 ELSE 0 END) AS totalHere,\n" +
+                    "    SUM(CASE WHEN a.currentRoomId IS NULL THEN 1 ELSE 0 END) AS missingCount,\n" +
+                    "    SUM(CASE WHEN a.currentRoomId = a.baseRoomId AND a.currentRoomId = loc.id THEN 1 ELSE 0 END) AS atHome,\n" +
+                    "    SUM(CASE WHEN a.currentRoomId != a.baseRoomId AND a.currentRoomId = loc.id THEN 1 ELSE 0 END) AS otherLocation\n" +
+                    "  FROM assets a, loc\n" +
+                    "), assets_here AS (\n" +
+                    "  SELECT a.id, a.name, a.details, a.condition\n" +
+                    "  FROM assets a, loc\n" +
+                    "  WHERE a.currentRoomId = loc.id\n" +
+                    "  ORDER BY a.id DESC\n" +
+                    "  LIMIT 50\n" +
+                    ")\n" +
+                    "SELECT 'location' AS type, id, name, description, parentId, locationCode, parentName, NULL AS col8, NULL AS col9 FROM loc\n" +
+                    "UNION ALL\n" +
+                    "SELECT 'summary', NULL, NULL, NULL, NULL, NULL, NULL, totalHere, missingCount FROM asset_summary\n" +
+                    "UNION ALL\n" +
+                    "SELECT 'assets_here', id, name, details, condition, NULL, NULL, NULL, NULL FROM assets_here"
+                else -> null
+            }
+            if (detailSql != null) {
+                viewModelScope.launch {
+                    handleSql(detailSql, messageId)
+                    _uiState.update { it.copy(lastOptions = emptyList()) } // Clear options after selection
+                }
+                return
+            }
+        }
 
         viewModelScope.launch {
             val mode = _uiState.value.mode
 
             if (mode == AiMode.Offline) {
-                // Offline mode: Use only local fallback engine, no Gemini calls
-                val fallbackSql = fallbackService.generate(userMessage)
+                // Offline mode: Special handling for single words
+                val trimmed = userMessage.trim()
+                if (trimmed.isNotBlank() && !trimmed.contains(" ") && trimmed.toIntOrNull() == null) {
+                    // Single word, not number: Intelligent progressive search
+                    val sql = fallbackEngine.generateSingleTokenIntelligent(trimmed, database)
+                    if (sql != null) {
+                        handleSql(sql, messageId)
+                        return@launch
+                    }
+                }
+                // Other offline queries
+                val fallbackSql = fallbackEngine.generate(userMessage)
                 if (fallbackSql != null) {
                     handleSql(fallbackSql, messageId)
                 } else {
@@ -130,11 +216,13 @@ class AiChatViewModel @Inject constructor(
                 return@launch
             }
 
-            // Gemini mode: Use only Gemini AI, no fallback on errors
+            // Gemini mode: Use Gemini AI with 2 minute timeout
             try {
-                val response = generativeModel.generateContent(
-                    "$schemaPrompt\n\nUser: $userMessage\n\nGenerate SQL query:"
-                )
+                val response = withTimeout(120000) { // 2 minutes
+                    generativeModel.generateContent(
+                        "$schemaPrompt\n\nUser: $userMessage\n\nGenerate SQL query:"
+                    )
+                }
 
                 val sqlQuery = response.text?.trim() ?: throw Exception("No SQL generated")
                 handleSql(sqlQuery, messageId)
@@ -147,6 +235,11 @@ class AiChatViewModel @Inject constructor(
 
     fun setMode(mode: AiMode) {
         _uiState.update { it.copy(mode = mode) }
+    }
+
+    fun retryLastMessage() {
+        val message = lastUserMessage ?: return
+        sendMessage(message)
     }
 
     private suspend fun handleSql(sqlQuery: String, messageId: String) {
@@ -203,22 +296,48 @@ class AiChatViewModel @Inject constructor(
                 }
                 cursor.close()
 
-                val encodedTable = encodeTable(columns, rows)
-                val aiMsg = ChatMessage(
-                    id = "${messageId}_response",
-                    text = "Query results (${rows.size} rows shown)",
-                    isUser = false,
-                    table = TableData(columns, rows)
-                )
-                chatMessageDao.insert(
-                    ChatMessageEntity(
-                        messageId = aiMsg.id,
-                        text = encodedTable,
+                // Check if this is an options response (from single word search)
+                if (columns.size >= 3 && columns[0] == "type" && rows.isNotEmpty()) {
+                    val options = rows.mapIndexedNotNull { index, row ->
+                        val type = row.getOrNull(0)
+                        val idStr = row.getOrNull(1)
+                        val name = row.getOrNull(2)
+                        if (type == "asset" || type == "location") {
+                            val id = idStr?.toIntOrNull()
+                            if (id != null && name != null) {
+                                OptionItem(index + 1, type, id, name)
+                            } else null
+                        } else null
+                    }.filterNotNull()
+                    if (options.isNotEmpty()) {
+                        val optionsText = "Possible matches:\n" + options.joinToString("\n") { "${it.index}. ${it.type.replaceFirstChar { it.uppercase() }}: ${it.name} (ID ${it.id})" }
+                        val aiMsg = ChatMessage("${messageId}_response", optionsText, false)
+                        chatMessageDao.insert(ChatMessageEntity(messageId = aiMsg.id, text = optionsText, isUser = false, timestamp = aiMsg.timestamp))
+                        _uiState.update { it.copy(isLoading = false, lastOptions = options) }
+                        return
+                    }
+                }
+
+                if (rows.isNotEmpty()) {
+                    val encodedTable = encodeTable(columns, rows)
+                    val aiMsg = ChatMessage(
+                        id = "${messageId}_response",
+                        text = "Query results (${rows.size} rows shown)",
                         isUser = false,
-                        timestamp = aiMsg.timestamp
+                        table = TableData(columns, rows)
                     )
-                )
-                _uiState.update { it.copy(isLoading = false, retryCount = 0) }
+                    chatMessageDao.insert(
+                        ChatMessageEntity(
+                            messageId = aiMsg.id,
+                            text = encodedTable,
+                            isUser = false,
+                            timestamp = aiMsg.timestamp
+                        )
+                    )
+                } else {
+                    // No matches, don't show message
+                }
+                _uiState.update { it.copy(isLoading = false) }
             } else {
                 // For write queries, execute all
                 queries.forEach { query ->
@@ -226,7 +345,7 @@ class AiChatViewModel @Inject constructor(
                 }
                 val aiMsg = ChatMessage("${messageId}_response", "Query executed successfully.", false)
                 chatMessageDao.insert(ChatMessageEntity(messageId = aiMsg.id, text = "Query executed successfully.", isUser = false, timestamp = aiMsg.timestamp))
-                _uiState.update { it.copy(isLoading = false, retryCount = 0) }
+                _uiState.update { it.copy(isLoading = false) }
             }
         } catch (e: Exception) {
             handleError("Query execution failed: ${e.message}", messageId)
@@ -234,54 +353,14 @@ class AiChatViewModel @Inject constructor(
     }
 
     private fun handleError(errorMsg: String, messageId: String) {
-        val currentState = _uiState.value
-        val newRetryCount = currentState.retryCount + 1
-
-        // In offline mode, do not call Gemini; just surface the error. (Offline and Gemini are completely distinct)
-        if (currentState.mode == AiMode.Offline) {
-            showFinalError(errorMsg)
-            return
-        }
-
-        // Gemini mode: Retry with Gemini only, no fallback
-        if (newRetryCount <= 100) {
-            // Retry by asking AI again (Gemini mode only)
-            viewModelScope.launch {
-                try {
-                    val response = generativeModel.generateContent(
-                        "$schemaPrompt\n\nPrevious query failed with error: $errorMsg\n\nPlease provide a corrected SQL query:"
-                    )
-                    val correctedSql = response.text?.trim() ?: throw Exception("No corrected SQL")
-                    executeQuery(correctedSql, messageId)
-                } catch (e: Exception) {
-                    if (newRetryCount >= 100) {
-                        showFinalError("Failed after 100 retries: ${e.message}")
-                    } else {
-                        _uiState.update { it.copy(retryCount = newRetryCount) }
-                        handleError(e.message ?: "Retry failed", messageId)
-                    }
-                }
-            }
-        } else {
-            showFinalError("Maximum retries exceeded. Error: $errorMsg")
-        }
+        showFinalError("Sorry, I couldn't process that request. Please try again.")
     }
 
     private fun showFinalError(errorMsg: String) {
-        val continueCount = _uiState.value.continueCount
-        if (continueCount < 100) {
-            _uiState.update { it.copy(
-                error = "Asset Tracing AI is working so long. If you want to continue, click Continue.",
-                isLoading = false,
-                retryCount = 0,
-                continueCount = continueCount + 1
-            ) }
-        } else {
-            _uiState.update { it.copy(
-                error = "Error: Try a different way.",
-                isLoading = false
-            ) }
-        }
+        _uiState.update { it.copy(
+            error = "Sorry, I couldn't process that request. Please try again.",
+            isLoading = false
+        ) }
     }
 
     private fun encodeTable(columns: List<String>, rows: List<List<String>>): String {
@@ -318,23 +397,6 @@ class AiChatViewModel @Inject constructor(
 
         if (rows.isEmpty()) return TableData(columns, emptyList())
         return TableData(columns, rows)
-    }
-
-    fun continueChat() {
-        val message = lastUserMessage ?: return
-        _uiState.update { it.copy(error = null, isLoading = true) }
-        // Retry the Gemini call for the last message
-        viewModelScope.launch {
-            try {
-                val response = generativeModel.generateContent(
-                    "$schemaPrompt\n\nUser: $message\n\nGenerate SQL query:"
-                )
-                val sqlQuery = response.text?.trim() ?: throw Exception("No SQL generated")
-                handleSql(sqlQuery, System.currentTimeMillis().toString())
-            } catch (e: Exception) {
-                handleError(e.message ?: "Unknown error", System.currentTimeMillis().toString())
-            }
-        }
     }
 
     fun executeQuery(messageId: String) {
@@ -404,7 +466,7 @@ class AiChatViewModel @Inject constructor(
     fun clearMessages() {
         viewModelScope.launch {
             chatMessageDao.clearAll()
-            _uiState.update { it.copy(messages = emptyList(), error = null, isLoading = false, retryCount = 0, continueCount = 0) }
+            _uiState.update { it.copy(messages = emptyList(), error = null, isLoading = false) }
         }
     }
 

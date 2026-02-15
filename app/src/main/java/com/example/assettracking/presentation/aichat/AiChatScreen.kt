@@ -133,13 +133,13 @@ fun AiChatScreen(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.End
                         ) {
-                            if (state.error!!.contains("continue")) {
+                            if (state.mode == AiMode.Gemini) {
                                 TextButton(onClick = { viewModel.dismissError() }) {
                                     Text("Cancel")
                                 }
                                 Spacer(modifier = Modifier.width(8.dp))
-                                TextButton(onClick = { viewModel.continueChat() }) {
-                                    Text("Continue")
+                                TextButton(onClick = { viewModel.retryLastMessage() }) {
+                                    Text("Retry")
                                 }
                             } else {
                                 TextButton(onClick = { viewModel.dismissError() }) {

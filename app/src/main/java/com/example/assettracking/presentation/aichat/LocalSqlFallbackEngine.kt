@@ -1,5 +1,8 @@
 package com.example.assettracking.presentation.aichat
 
+import androidx.sqlite.db.SimpleSQLiteQuery
+import com.example.assettracking.data.local.AssetTrackingDatabase
+
 /**
  * Deterministic, schema-aware SQL template generator for offline/quota fallback.
  * Keeps logic isolated for easier unit testing.
@@ -96,6 +99,31 @@ class LocalSqlFallbackEngine {
                         "WHERE lc.locationCode LIKE '${safeLike(room)}' OR lc.name LIKE '${safeLike(room)}'"
             }
 
+                        // Direct "where is asset ID" lookup
+                        whereIsMatch != null && assetToken != null && assetToken.toIntOrNull() != null -> {
+                            val id = assetToken.toIntOrNull()!!
+                            "SELECT a.id, a.name, a.details, a.condition, lb.name AS baseLocation, lc.name AS currentLocation, " +
+                                    "CASE WHEN a.currentRoomId IS NULL THEN 'Missing' " +
+                                    "WHEN a.currentRoomId = a.baseRoomId THEN 'At Home' ELSE 'At Other Location' END AS status " +
+                                    "FROM assets a " +
+                                    "LEFT JOIN locations lb ON a.baseRoomId = lb.id " +
+                                    "LEFT JOIN locations lc ON a.currentRoomId = lc.id " +
+                                    "WHERE a.id = $id"
+                        }
+
+                        // Simple "where is [term]" lookup
+                        whereIsMatch != null -> {
+                            val term = safe(whereIsMatch.groupValues[1])
+                            "SELECT a.id, a.name, a.details, a.condition, lb.name AS baseLocation, lc.name AS currentLocation, " +
+                                    "CASE WHEN a.currentRoomId IS NULL THEN 'Missing' " +
+                                    "WHEN a.currentRoomId = a.baseRoomId THEN 'At Home' ELSE 'At Other Location' END AS status " +
+                                    "FROM assets a " +
+                                    "LEFT JOIN locations lb ON a.baseRoomId = lb.id " +
+                                    "LEFT JOIN locations lc ON a.currentRoomId = lc.id " +
+                                    "WHERE a.name LIKE '${safeLike(term)}' OR CAST(a.id AS TEXT) LIKE '${safeLike(term)}' " +
+                                    "ORDER BY a.id DESC LIMIT 1"
+                        }
+
                         // Find asset by token/id/name with disambiguation and best guess
                         assetToken != null || whereIsMatch != null || findMatch != null || text.contains("find asset") || text.contains("where is") -> {
                                 val termRaw = when {
@@ -130,7 +158,7 @@ class LocalSqlFallbackEngine {
                                 )
                                 SELECT 'disambiguate_asset' AS type, id, name, score, NULL, NULL, NULL, NULL, NULL FROM asset_final WHERE (SELECT c FROM asset_count) > 1
                                 UNION ALL
-                                SELECT 'best_guess_asset' AS type, id, name, score, NULL, NULL, NULL, NULL, NULL FROM asset_final ORDER BY score DESC, id DESC LIMIT 1
+                                SELECT 'best_guess_asset' AS type, id, name, score, NULL, NULL, NULL, NULL, NULL FROM asset_final LIMIT 1
                                 UNION ALL
                                 SELECT 'asset_card' AS type, a.id, a.name, a.details, a.condition, lb.name AS baseLoc, lc.name AS currentLoc,
                                     CASE WHEN a.currentRoomId IS NULL THEN 'Missing' WHEN a.currentRoomId = a.baseRoomId THEN 'At Home' ELSE 'At Other Location' END AS status,
@@ -208,9 +236,9 @@ class LocalSqlFallbackEngine {
                                 UNION ALL
                                 SELECT 'disambiguate_location' AS type, l.id, l.name, l.score, l.ord FROM location_final l WHERE (SELECT c FROM loc_count) != 1
                                 UNION ALL
-                                SELECT 'best_guess_asset' AS type, a.id, (SELECT name FROM assets WHERE id = a.id) AS name, a.score, a.ord FROM asset_final a ORDER BY a.score DESC, a.ord LIMIT 1
+                                SELECT 'best_guess_asset' AS type, a.id, (SELECT name FROM assets WHERE id = a.id) AS name, a.score, a.ord FROM asset_final a LIMIT 1
                                 UNION ALL
-                                SELECT 'best_guess_location' AS type, l.id, (SELECT name FROM locations WHERE id = l.id) AS name, l.score, l.ord FROM location_final l ORDER BY l.score DESC, l.ord LIMIT 1
+                                SELECT 'best_guess_location' AS type, l.id, (SELECT name FROM locations WHERE id = l.id) AS name, l.score, l.ord FROM location_final l LIMIT 1
                                 UNION ALL
                                 SELECT 'move_executed' AS type, (SELECT assetId FROM chosen), (SELECT locationId FROM chosen), NULL AS score, NULL AS ord
                                 WHERE (SELECT assetCount FROM chosen) = 1 AND (SELECT locCount FROM chosen) = 1;
@@ -358,85 +386,65 @@ class LocalSqlFallbackEngine {
                     "SELECT 'assets_here', id, name, details, condition, NULL, NULL, NULL, NULL FROM assets_here"
             }
 
-                        // Single-token or collapsed pair (e.g., "wat 1" -> "wat1"): probe assets/locations and disambiguate
-                        singleToken != null || collapsedToken != null -> {
+            // Single token asset name search with simple algo
+            singleToken != null && singleToken.toIntOrNull() == null -> {
+                val token = safe(singleToken)
+                """
+                WITH check_asset AS (SELECT COUNT(*) AS c FROM assets WHERE LOWER(name) = LOWER('$token')),
+                check_loc AS (SELECT COUNT(*) AS c FROM locations WHERE LOWER(name) = LOWER('$token') OR LOWER(locationCode) = LOWER('$token')),
+                asset_detail AS (
+                    SELECT a.id, a.name, a.details, a.condition, lb.name AS baseLocation, lc.name AS currentLocation,
+                        CASE WHEN a.currentRoomId IS NULL THEN 'Missing' WHEN a.currentRoomId = a.baseRoomId THEN 'At Home' ELSE 'At Other Location' END AS status
+                    FROM assets a
+                    LEFT JOIN locations lb ON a.baseRoomId = lb.id
+                    LEFT JOIN locations lc ON a.currentRoomId = lc.id
+                    WHERE LOWER(a.name) = LOWER('$token')
+                ),
+                loc_detail AS (
+                    SELECT l.id, l.name, l.description, l.locationCode, (SELECT name FROM locations p WHERE p.id = l.parentId) AS parentName
+                    FROM locations l
+                    WHERE LOWER(l.name) = LOWER('$token') OR LOWER(l.locationCode) = LOWER('$token')
+                ),
+                top_matches AS (
+                    SELECT 'asset' AS type, a.id, a.name, a.details, a.condition, lb.name AS baseLocation, lc.name AS currentLocation,
+                        CASE WHEN a.currentRoomId IS NULL THEN 'Missing' WHEN a.currentRoomId = a.baseRoomId THEN 'At Home' ELSE 'At Other Location' END AS status
+                    FROM assets a
+                    LEFT JOIN locations lb ON a.baseRoomId = lb.id
+                    LEFT JOIN locations lc ON a.currentRoomId = lc.id
+                    WHERE a.name LIKE '%$token%'
+                    ORDER BY a.id DESC LIMIT 3
+                    UNION ALL
+                    SELECT 'location' AS type, l.id, l.name, l.description, l.locationCode, (SELECT name FROM locations p WHERE p.id = l.parentId) AS parentName, NULL, NULL
+                    FROM locations l
+                    WHERE l.name LIKE '%$token%' OR l.locationCode LIKE '%$token%'
+                    ORDER BY l.id DESC LIMIT 3
+                )
+                SELECT * FROM asset_detail WHERE (SELECT c FROM check_asset) > 0
+                UNION ALL
+                SELECT * FROM loc_detail WHERE (SELECT c FROM check_loc) > 0 AND (SELECT c FROM check_asset) = 0
+                UNION ALL
+                SELECT * FROM top_matches WHERE (SELECT c FROM check_asset) = 0 AND (SELECT c FROM check_loc) = 0
+                """.trimIndent()
+            }
+
+                        // Single-token or collapsed pair: Simple search in assets and locations
+                        singleToken != null && singleToken.toIntOrNull() != null || collapsedToken != null -> {
                             val raw = singleToken ?: collapsedToken!!
                             val token = safe(raw)
                             val tokenLike = safeLike(raw)
-                                """
-                                WITH tok AS (SELECT '$token' AS t, '$tokenLike' AS t_like),
-                                asset_hits AS (
-                                    SELECT id, name, 3 AS score FROM assets a, tok WHERE LOWER(a.name) = LOWER(tok.t) OR CAST(a.id AS TEXT) = tok.t
-                                    UNION ALL
-                                    SELECT id, name, 2 AS score FROM assets a, tok WHERE a.name LIKE tok.t_like OR CAST(a.id AS TEXT) LIKE tok.t_like
-                                ),
-                                location_hits AS (
-                                    SELECT id, name, 3 AS score FROM locations l, tok WHERE LOWER(l.name) = LOWER(tok.t) OR LOWER(l.locationCode) = LOWER(tok.t) OR CAST(l.id AS TEXT) = tok.t
-                                    UNION ALL
-                                    SELECT id, name, 2 AS score FROM locations l, tok WHERE l.name LIKE tok.t_like OR l.locationCode LIKE tok.t_like OR CAST(l.id AS TEXT) LIKE tok.t_like
-                                ),
-                                asset_final AS (
-                                    SELECT DISTINCT id, name, score FROM asset_hits ORDER BY score DESC, id DESC LIMIT 5
-                                ),
-                                location_final AS (
-                                    SELECT DISTINCT id, name, score FROM location_hits ORDER BY score DESC, id DESC LIMIT 5
-                                ),
-                                asset_count AS (SELECT COUNT(*) AS c FROM asset_final),
-                                loc_count AS (SELECT COUNT(*) AS c FROM location_final),
-                                chosen_asset AS (SELECT id FROM asset_final ORDER BY score DESC, id DESC LIMIT 1),
-                                chosen_loc AS (SELECT id FROM location_final ORDER BY score DESC, id DESC LIMIT 1),
-                                loc_summary AS (
-                                    SELECT
-                                        SUM(CASE WHEN a.currentRoomId = cl.id THEN 1 ELSE 0 END) AS totalHere,
-                                        SUM(CASE WHEN a.currentRoomId IS NULL THEN 1 ELSE 0 END) AS missingCount,
-                                        SUM(CASE WHEN a.currentRoomId = a.baseRoomId AND a.currentRoomId = cl.id THEN 1 ELSE 0 END) AS atHome,
-                                        SUM(CASE WHEN a.currentRoomId != a.baseRoomId AND a.currentRoomId = cl.id THEN 1 ELSE 0 END) AS otherLocation
-                                    FROM assets a, chosen_loc cl
-                                ),
-                                loc_assets AS (
-                                    SELECT a.id, a.name, a.details, a.condition
-                                    FROM assets a, chosen_loc cl
-                                    WHERE a.currentRoomId = cl.id
-                                    ORDER BY a.id DESC
-                                    LIMIT 50
-                                ),
-                                asset_moves AS (
-                                    SELECT m.id, lf.name AS fromLoc, lt.name AS toLoc, m.timestamp
-                                    FROM asset_movements m, chosen_asset ca
-                                    LEFT JOIN locations lf ON m.fromRoomId = lf.id
-                                    LEFT JOIN locations lt ON m.toRoomId = lt.id
-                                    WHERE m.assetId = ca.id
-                                    ORDER BY m.timestamp DESC
-                                    LIMIT 5
-                                )
-                                SELECT 'disambiguate_asset' AS type, id, name, score, NULL, NULL, NULL, NULL, NULL FROM asset_final WHERE (SELECT c FROM asset_count) > 1
-                                UNION ALL
-                                SELECT 'disambiguate_location' AS type, id, name, score, NULL, NULL, NULL, NULL, NULL FROM location_final WHERE (SELECT c FROM loc_count) > 1
-                                UNION ALL
-                                SELECT 'best_guess_asset' AS type, id, name, score, NULL, NULL, NULL, NULL, NULL FROM asset_final ORDER BY score DESC, id DESC LIMIT 1
-                                UNION ALL
-                                SELECT 'best_guess_location' AS type, id, name, score, NULL, NULL, NULL, NULL, NULL FROM location_final ORDER BY score DESC, id DESC LIMIT 1
-                                UNION ALL
-                                SELECT 'asset_card' AS type, a.id, a.name, a.details, a.condition, lb.name AS baseLoc, lc.name AS currentLoc,
-                                    CASE WHEN a.currentRoomId IS NULL THEN 'Missing' WHEN a.currentRoomId = a.baseRoomId THEN 'At Home' ELSE 'At Other Location' END AS status,
-                                    (SELECT timestamp FROM asset_movements m WHERE m.assetId = a.id ORDER BY m.timestamp DESC LIMIT 1) AS lastMovedAt
-                                FROM assets a, chosen_asset ca
-                                LEFT JOIN locations lb ON a.baseRoomId = lb.id
-                                LEFT JOIN locations lc ON a.currentRoomId = lc.id
-                                WHERE a.id = ca.id
-                                UNION ALL
-                                SELECT 'asset_move' AS type, id, fromLoc, toLoc, timestamp, NULL, NULL, NULL, NULL FROM asset_moves
-                                UNION ALL
-                                SELECT 'location_card' AS type, l.id, l.name, l.description, l.parentId, l.locationCode, (SELECT name FROM locations p WHERE p.id = l.parentId), NULL, NULL
-                                FROM locations l, chosen_loc cl
-                                WHERE l.id = cl.id
-                                UNION ALL
-                                SELECT 'location_summary' AS type, NULL, NULL, NULL, NULL, NULL, NULL, totalHere, missingCount FROM loc_summary
-                                UNION ALL
-                                SELECT 'location_assets' AS type, id, name, details, condition, NULL, NULL, NULL, NULL FROM loc_assets
-                                UNION ALL
-                                SELECT 'no_match' AS type, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL WHERE (SELECT c FROM asset_count) = 0 AND (SELECT c FROM loc_count) = 0;
-                                """.trimIndent()
+                            """
+                            SELECT 'asset' AS type, a.id, a.name, a.details, a.condition, lb.name AS baseLocation, lc.name AS currentLocation,
+                                CASE WHEN a.currentRoomId IS NULL THEN 'Missing' WHEN a.currentRoomId = a.baseRoomId THEN 'At Home' ELSE 'At Other Location' END AS status
+                            FROM assets a
+                            LEFT JOIN locations lb ON a.baseRoomId = lb.id
+                            LEFT JOIN locations lc ON a.currentRoomId = lc.id
+                            WHERE LOWER(a.name) = LOWER('$token') OR CAST(a.id AS TEXT) = '$token' OR a.name LIKE '$tokenLike'
+                            UNION ALL
+                            SELECT 'location' AS type, l.id, l.name, l.description, l.locationCode, (SELECT name FROM locations p WHERE p.id = l.parentId) AS parentName, NULL, NULL
+                            FROM locations l
+                            WHERE LOWER(l.name) = LOWER('$token') OR LOWER(l.locationCode) = LOWER('$token') OR l.name LIKE '$tokenLike' OR l.locationCode LIKE '$tokenLike'
+                            ORDER BY type, id DESC LIMIT 10;
+                            """.trimIndent()
                         }
 
             // At home / other location / unassigned
@@ -502,5 +510,78 @@ class LocalSqlFallbackEngine {
 
             else -> null
         }
+    }
+
+    fun generateSingleTokenIntelligent(token: String, database: AssetTrackingDatabase): String? {
+        val trimmed = token.trim()
+        if (trimmed.isBlank() || trimmed.contains(" ") || trimmed.toIntOrNull() != null) return null
+
+        // Intelligent progressive search
+        var table: String? = null
+        var current = trimmed
+        while (current.length >= 3) {
+            val assetCount = database.openHelper.writableDatabase.query(SimpleSQLiteQuery("SELECT COUNT(*) FROM assets WHERE name LIKE ?", arrayOf("$current%"))).use { it.moveToFirst(); it.getInt(0) }
+            if (assetCount > 0) {
+                table = "asset"
+                break
+            }
+            val locCount = database.openHelper.writableDatabase.query(SimpleSQLiteQuery("SELECT COUNT(*) FROM locations WHERE name LIKE ? OR locationCode LIKE ?", arrayOf("$current%", "$current%"))).use { it.moveToFirst(); it.getInt(0) }
+            if (locCount > 0) {
+                table = "location"
+                break
+            }
+            current = current.dropLast(1)
+        }
+        if (table != null) {
+            // Progressive search in the table
+            var searchToken = trimmed
+            var lastCount = 0
+            var lastToken = ""
+            while (searchToken.length >= 3) {
+                val count = if (table == "asset") {
+                    database.openHelper.writableDatabase.query(SimpleSQLiteQuery("SELECT COUNT(*) FROM assets WHERE name LIKE ?", arrayOf("$searchToken%"))).use { it.moveToFirst(); it.getInt(0) }
+                } else {
+                    database.openHelper.writableDatabase.query(SimpleSQLiteQuery("SELECT COUNT(*) FROM locations WHERE name LIKE ? OR locationCode LIKE ?", arrayOf("$searchToken%", "$searchToken%"))).use { it.moveToFirst(); it.getInt(0) }
+                }
+                if (count > 0) {
+                    lastCount = count
+                    lastToken = searchToken
+                } else {
+                    break
+                }
+                searchToken = searchToken.dropLast(1)
+            }
+            if (lastCount > 0) {
+                if (lastToken == trimmed && lastCount == 1) {
+                    // Exact match, show detail
+                    val sql = if (table == "asset") {
+                        "SELECT a.id, a.name, a.details, a.condition, lb.name AS baseLocation, lc.name AS currentLocation, CASE WHEN a.currentRoomId IS NULL THEN 'Missing' WHEN a.currentRoomId = a.baseRoomId THEN 'At Home' ELSE 'At Other Location' END AS status FROM assets a LEFT JOIN locations lb ON a.baseRoomId = lb.id LEFT JOIN locations lc ON a.currentRoomId = lc.id WHERE LOWER(a.name) = LOWER('$trimmed')"
+                    } else {
+                        "SELECT l.id, l.name, l.description, l.locationCode, (SELECT name FROM locations p WHERE p.id = l.parentId) AS parentName FROM locations l WHERE LOWER(l.name) = LOWER('$trimmed') OR LOWER(l.locationCode) = LOWER('$trimmed')"
+                    }
+                    return sql
+                } else {
+                    // Show top 3 with intersection
+                    val remaining = trimmed.substring(lastToken.length)
+                    val sql = if (table == "asset") {
+                        if (remaining.isNotEmpty()) {
+                            "SELECT a.id, a.name, a.details, a.condition, lb.name AS baseLocation, lc.name AS currentLocation, CASE WHEN a.currentRoomId IS NULL THEN 'Missing' WHEN a.currentRoomId = a.baseRoomId THEN 'At Home' ELSE 'At Other Location' END AS status FROM assets a LEFT JOIN locations lb ON a.baseRoomId = lb.id LEFT JOIN locations lc ON a.currentRoomId = lc.id WHERE a.name LIKE '%$lastToken%' AND a.name LIKE '%$remaining%' ORDER BY a.id DESC LIMIT 3"
+                        } else {
+                            "SELECT a.id, a.name, a.details, a.condition, lb.name AS baseLocation, lc.name AS currentLocation, CASE WHEN a.currentRoomId IS NULL THEN 'Missing' WHEN a.currentRoomId = a.baseRoomId THEN 'At Home' ELSE 'At Other Location' END AS status FROM assets a LEFT JOIN locations lb ON a.baseRoomId = lb.id LEFT JOIN locations lc ON a.currentRoomId = lc.id WHERE a.name LIKE '%$lastToken%' ORDER BY a.id DESC LIMIT 3"
+                        }
+                    } else {
+                        if (remaining.isNotEmpty()) {
+                            "SELECT l.id, l.name, l.description, l.locationCode, (SELECT name FROM locations p WHERE p.id = l.parentId) AS parentName FROM locations l WHERE (l.name LIKE '%$lastToken%' OR l.locationCode LIKE '%$lastToken%') AND (l.name LIKE '%$remaining%' OR l.locationCode LIKE '%$remaining%') ORDER BY l.id DESC LIMIT 3"
+                        } else {
+                            "SELECT l.id, l.name, l.description, l.locationCode, (SELECT name FROM locations p WHERE p.id = l.parentId) AS parentName FROM locations l WHERE l.name LIKE '%$lastToken%' OR l.locationCode LIKE '%$lastToken%' ORDER BY l.id DESC LIMIT 3"
+                        }
+                    }
+                    return sql
+                }
+            }
+        }
+        // No match in progressive, show top 3 from both
+        val sql = "SELECT 'asset' AS type, a.id, a.name, a.details, a.condition, lb.name AS baseLocation, lc.name AS currentLocation, CASE WHEN a.currentRoomId IS NULL THEN 'Missing' WHEN a.currentRoomId = a.baseRoomId THEN 'At Home' ELSE 'At Other Location' END AS status FROM assets a LEFT JOIN locations lb ON a.baseRoomId = lb.id LEFT JOIN locations lc ON a.currentRoomId = lc.id WHERE a.name LIKE '%$trimmed%' ORDER BY a.id DESC LIMIT 3 UNION ALL SELECT 'location' AS type, l.id, l.name, l.description, l.locationCode, (SELECT name FROM locations p WHERE p.id = l.parentId) AS parentName, NULL, NULL FROM locations l WHERE l.name LIKE '%$trimmed%' OR l.locationCode LIKE '%$trimmed%' ORDER BY l.id DESC LIMIT 3"
+        return sql
     }
 }
