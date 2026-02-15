@@ -63,6 +63,12 @@ class LocalSqlFallbackEngine {
                 "SELECT a.id, a.name, a.details, a.condition, lb.name AS baseLocation, lc.name AS currentLocation FROM assets a LEFT JOIN locations lb ON a.baseRoomId = lb.id LEFT JOIN locations lc ON a.currentRoomId = lc.id WHERE a.name LIKE '%$escapedQuery%' AND a.name != '$escapedQuery' LIMIT 5"
             }
 
+            // Specific location assets queries (e.g., "location 1 assets", "floor 1 asset")
+            message.matches(Regex(".+\\s+(?:assets?|asset)$")) && !message.contains("list") && !message.contains("show") && !message.contains("all") && !message.contains("missing") -> {
+                val location = message.substringBeforeLast(" ").trim()
+                "SELECT a.id, a.name, a.details, a.condition, bl.name AS base_location, cl.name AS current_location FROM assets a LEFT JOIN locations bl ON a.baseRoomId = bl.id LEFT JOIN locations cl ON a.currentRoomId = cl.id WHERE bl.name LIKE '%$location%' OR bl.locationCode LIKE '%$location%' OR cl.name LIKE '%$location%' OR cl.locationCode LIKE '%$location%'"
+            }
+
             message.contains("all assets") || message.contains("show assets") || message.contains("list assets") || message.contains("asset list") || message.contains("list of assets") ->
                 "SELECT a.id, a.name, a.details, a.condition, l.name AS location FROM assets a LEFT JOIN locations l ON a.currentRoomId = l.id"
 
