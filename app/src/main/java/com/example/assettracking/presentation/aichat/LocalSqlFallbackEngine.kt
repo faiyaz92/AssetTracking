@@ -520,12 +520,12 @@ class LocalSqlFallbackEngine {
         var table: String? = null
         var current = trimmed
         while (current.length >= 3) {
-            val assetCount = database.openHelper.writableDatabase.query(SimpleSQLiteQuery("SELECT COUNT(*) FROM assets WHERE name LIKE ?", arrayOf("$current%"))).use { it.moveToFirst(); it.getInt(0) }
+            val assetCount = database.openHelper.writableDatabase.query(SimpleSQLiteQuery("SELECT COUNT(*) FROM assets WHERE name LIKE ?", arrayOf("%$current%"))).use { it.moveToFirst(); it.getInt(0) }
             if (assetCount > 0) {
                 table = "asset"
                 break
             }
-            val locCount = database.openHelper.writableDatabase.query(SimpleSQLiteQuery("SELECT COUNT(*) FROM locations WHERE name LIKE ? OR locationCode LIKE ?", arrayOf("$current%", "$current%"))).use { it.moveToFirst(); it.getInt(0) }
+            val locCount = database.openHelper.writableDatabase.query(SimpleSQLiteQuery("SELECT COUNT(*) FROM locations WHERE name LIKE ? OR locationCode LIKE ?", arrayOf("%$current%", "%$current%"))).use { it.moveToFirst(); it.getInt(0) }
             if (locCount > 0) {
                 table = "location"
                 break
@@ -539,9 +539,9 @@ class LocalSqlFallbackEngine {
             var lastToken = ""
             while (searchToken.length >= 3) {
                 val count = if (table == "asset") {
-                    database.openHelper.writableDatabase.query(SimpleSQLiteQuery("SELECT COUNT(*) FROM assets WHERE name LIKE ?", arrayOf("$searchToken%"))).use { it.moveToFirst(); it.getInt(0) }
+                    database.openHelper.writableDatabase.query(SimpleSQLiteQuery("SELECT COUNT(*) FROM assets WHERE name LIKE ?", arrayOf("%$searchToken%"))).use { it.moveToFirst(); it.getInt(0) }
                 } else {
-                    database.openHelper.writableDatabase.query(SimpleSQLiteQuery("SELECT COUNT(*) FROM locations WHERE name LIKE ? OR locationCode LIKE ?", arrayOf("$searchToken%", "$searchToken%"))).use { it.moveToFirst(); it.getInt(0) }
+                    database.openHelper.writableDatabase.query(SimpleSQLiteQuery("SELECT COUNT(*) FROM locations WHERE name LIKE ? OR locationCode LIKE ?", arrayOf("%$searchToken%", "%$searchToken%"))).use { it.moveToFirst(); it.getInt(0) }
                 }
                 if (count > 0) {
                     lastCount = count
