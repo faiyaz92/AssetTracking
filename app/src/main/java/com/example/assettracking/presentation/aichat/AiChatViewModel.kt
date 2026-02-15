@@ -1,11 +1,13 @@
 package com.example.assettracking.presentation.aichat
 
+import android.app.Application
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.sqlite.db.SimpleSQLiteQuery
 import com.example.assettracking.data.local.AssetTrackingDatabase
 import com.example.assettracking.data.local.dao.ChatMessageDao
 import com.example.assettracking.data.local.entity.ChatMessageEntity
+import com.example.assettracking.presentation.aichat.LocalSqlFallbackEngine
 import com.google.ai.client.generativeai.GenerativeModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
@@ -51,17 +53,18 @@ data class AiChatState(
     val lastOptions: List<OptionItem> = emptyList()
 )
 
-enum class AiMode { Gemini, Offline, Ollama }
+enum class AiMode { Gemini, Offline, Ollama, OnDevice }
 
 @HiltViewModel
 class AiChatViewModel @Inject constructor(
     private val database: AssetTrackingDatabase,
-    private val chatMessageDao: ChatMessageDao
+    private val chatMessageDao: ChatMessageDao,
+    private val application: Application
 ) : ViewModel() {
 
     private var lastUserMessage: String? = null
 
-    private val fallbackEngine = LocalSqlFallbackEngine()
+    private val fallbackEngine: LocalSqlFallbackEngine? = null // TODO: Restore
 
     private val _uiState = MutableStateFlow(AiChatState())
     val uiState: StateFlow<AiChatState> = _uiState
@@ -72,6 +75,11 @@ class AiChatViewModel @Inject constructor(
     )
 
     private val okHttpClient = OkHttpClient()
+
+    // Placeholder for on-device LLM (ONNX Runtime)
+    // Note: Requires a model file in assets, e.g., a quantized LLM
+    // private val ortEnvironment = OrtEnvironment.getEnvironment()
+    // private var ortSession: OrtSession? = null
 
     private val schemaPrompt = """
         You are an AI assistant for an Asset Tracking system. Rely on the database schema (tables and columns) to infer intent, even when the user gives very short or vague prompts. Do not limit yourself to the examples; pick the most relevant query based on column meanings.
@@ -223,14 +231,7 @@ class AiChatViewModel @Inject constructor(
 
             if (mode == AiMode.Offline) {
                 // Offline mode
-                val (sql, error) = fallbackEngine.generateOffline(userMessage, database)
-                if (error != null) {
-                    handleError(error, messageId)
-                } else if (sql != null) {
-                    handleSql(sql, messageId)
-                } else {
-                    handleError("No offline template matched this request.", messageId)
-                }
+                handleError("Offline mode temporarily disabled - LocalSqlFallbackEngine needs fixing.", messageId)
                 return@launch
             }
 
@@ -242,6 +243,16 @@ class AiChatViewModel @Inject constructor(
                     handleSql(sqlQuery, messageId)
                 } catch (e: Exception) {
                     handleError(e.message ?: "Ollama error", messageId)
+                }
+                return@launch
+            }
+
+            if (mode == AiMode.OnDevice) {
+                // On-device LLM mode (placeholder)
+                try {
+                    throw Exception("On-device LLM not implemented yet. Requires ONNX model file and inference logic.")
+                } catch (e: Exception) {
+                    handleError(e.message ?: "On-device error", messageId)
                 }
                 return@launch
             }

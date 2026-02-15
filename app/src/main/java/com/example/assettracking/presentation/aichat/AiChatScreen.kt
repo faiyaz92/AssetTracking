@@ -190,6 +190,7 @@ private fun ModeMenu(current: AiMode, onSelect: (AiMode) -> Unit) {
                     AiMode.Gemini -> "Gemini"
                     AiMode.Offline -> "Offline"
                     AiMode.Ollama -> "Ollama"
+                    AiMode.OnDevice -> "OnDevice"
                 },
                 color = Color.White
             )
@@ -215,6 +216,13 @@ private fun ModeMenu(current: AiMode, onSelect: (AiMode) -> Unit) {
                 onClick = {
                     expanded = false
                     onSelect(AiMode.Ollama)
+                }
+            )
+            DropdownMenuItem(
+                text = { Text("OnDevice") },
+                onClick = {
+                    expanded = false
+                    onSelect(AiMode.OnDevice)
                 }
             )
         }
