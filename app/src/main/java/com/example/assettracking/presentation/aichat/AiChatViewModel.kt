@@ -196,36 +196,12 @@ class AiChatViewModel @Inject constructor(
             val mode = _uiState.value.mode
 
             if (mode == AiMode.Offline) {
-                // Offline mode: Special handling for single words
-                val trimmed = userMessage.trim()
-                if (trimmed.isNotBlank() && !trimmed.contains(" ") && trimmed.toIntOrNull() == null) {
-                    // Single word, not number: Intelligent progressive search
-                    val sql = fallbackEngine.generateSingleTokenIntelligent(trimmed, database)
-                    if (sql != null) {
-                        handleSql(sql, messageId)
-                        return@launch
-                    }
-                }
-                // Special handling for "where is [term]"
-                val whereIsMatch = Regex("where\\s+is\\s+(.+)", RegexOption.IGNORE_CASE).find(trimmed)
-                if (whereIsMatch != null) {
-                    val term = whereIsMatch.groupValues[1].trim()
-                    if (term.isNotBlank()) {
-                        val exactCount = database.openHelper.writableDatabase.query(SimpleSQLiteQuery("SELECT COUNT(*) FROM assets WHERE LOWER(name) = LOWER('$term') OR CAST(id AS TEXT) = '$term'")).use { it.moveToFirst(); it.getInt(0) }
-                        if (exactCount > 0) {
-                            val sql = "SELECT a.id, a.name, a.details, a.condition, lb.name AS baseLocation, lc.name AS currentLocation, CASE WHEN a.currentRoomId IS NULL THEN 'Missing' WHEN a.currentRoomId = a.baseRoomId THEN 'At Home' ELSE 'At Other Location' END AS status FROM assets a LEFT JOIN locations lb ON a.baseRoomId = lb.id LEFT JOIN locations lc ON a.currentRoomId = lc.id WHERE LOWER(a.name) = LOWER('$term') OR CAST(a.id AS TEXT) = '$term' LIMIT 1"
-                            handleSql(sql, messageId)
-                            return@launch
-                        } else {
-                            handleError("No exact match found for '$term'.", messageId)
-                            return@launch
-                        }
-                    }
-                }
-                // Other offline queries
-                val fallbackSql = fallbackEngine.generate(userMessage)
-                if (fallbackSql != null) {
-                    handleSql(fallbackSql, messageId)
+                // Offline mode
+                val (sql, error) = fallbackEngine.generateOffline(userMessage, database)
+                if (error != null) {
+                    handleError(error, messageId)
+                } else if (sql != null) {
+                    handleSql(sql, messageId)
                 } else {
                     handleError("No offline template matched this request.", messageId)
                 }
@@ -369,7 +345,7 @@ class AiChatViewModel @Inject constructor(
     }
 
     private fun handleError(errorMsg: String, messageId: String) {
-        showFinalError("Sorry, I couldn't process that request. Please try again.")
+        showFinalError(errorMsg)
     }
 
     private fun showFinalError(errorMsg: String) {

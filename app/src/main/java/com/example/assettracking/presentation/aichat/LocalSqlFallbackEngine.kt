@@ -571,4 +571,33 @@ class LocalSqlFallbackEngine {
         val sql = "SELECT 'asset' AS type, a.id, a.name, a.details, a.condition, lb.name AS baseLocation, lc.name AS currentLocation, CASE WHEN a.currentRoomId IS NULL THEN 'Missing' WHEN a.currentRoomId = a.baseRoomId THEN 'At Home' ELSE 'At Other Location' END AS status FROM assets a LEFT JOIN locations lb ON a.baseRoomId = lb.id LEFT JOIN locations lc ON a.currentRoomId = lc.id WHERE a.name LIKE '%$trimmed%' ORDER BY a.id DESC LIMIT 3 UNION ALL SELECT 'location' AS type, l.id, l.name, l.description, l.locationCode, (SELECT name FROM locations p WHERE p.id = l.parentId) AS parentName, NULL, NULL FROM locations l WHERE l.name LIKE '%$trimmed%' OR l.locationCode LIKE '%$trimmed%' ORDER BY l.id DESC LIMIT 3"
         return sql
     }
+
+    fun generateOffline(userMessage: String, database: AssetTrackingDatabase): Pair<String?, String?> {
+        val trimmed = userMessage.trim()
+
+        // Single word, not number
+        if (trimmed.isNotBlank() && !trimmed.contains(" ") && trimmed.toIntOrNull() == null) {
+            val sql = generateSingleTokenIntelligent(trimmed, database)
+            return sql to null
+        }
+
+        // Special handling for "where is [term]"
+        val whereIsMatch = Regex("where\\s+is\\s+(.+)", RegexOption.IGNORE_CASE).find(trimmed)
+        if (whereIsMatch != null) {
+            val term = whereIsMatch.groupValues[1].trim()
+            if (term.isNotBlank()) {
+                val exactCount = database.openHelper.writableDatabase.query(SimpleSQLiteQuery("SELECT COUNT(*) FROM assets WHERE LOWER(name) = LOWER('$term') OR CAST(id AS TEXT) = '$term'")).use { it.moveToFirst(); it.getInt(0) }
+                if (exactCount > 0) {
+                    val sql = "SELECT a.id, a.name, a.details, a.condition, lb.name AS baseLocation, lc.name AS currentLocation, CASE WHEN a.currentRoomId IS NULL THEN 'Missing' WHEN a.currentRoomId = a.baseRoomId THEN 'At Home' ELSE 'At Other Location' END AS status FROM assets a LEFT JOIN locations lb ON a.baseRoomId = lb.id LEFT JOIN locations lc ON a.currentRoomId = lc.id WHERE LOWER(a.name) = LOWER('$term') OR CAST(a.id AS TEXT) = '$term' LIMIT 1"
+                    return sql to null
+                } else {
+                    return null to "No exact match found for '$term'."
+                }
+            }
+        }
+
+        // Other offline queries
+        val sql = generate(userMessage)
+        return sql to null
+    }
 }
