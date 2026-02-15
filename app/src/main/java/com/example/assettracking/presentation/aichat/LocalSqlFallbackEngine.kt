@@ -121,7 +121,7 @@ class LocalSqlFallbackEngine {
                                     "LEFT JOIN locations lb ON a.baseRoomId = lb.id " +
                                     "LEFT JOIN locations lc ON a.currentRoomId = lc.id " +
                                     "WHERE a.name LIKE '${safeLike(term)}' OR CAST(a.id AS TEXT) LIKE '${safeLike(term)}' " +
-                                    "ORDER BY a.id DESC LIMIT 1"
+                                    "ORDER BY CASE WHEN LOWER(a.name) = LOWER('$term') THEN 1 WHEN CAST(a.id AS TEXT) = '$term' THEN 1 ELSE 2 END, a.id DESC LIMIT 1"
                         }
 
                         // Find asset by token/id/name with disambiguation and best guess
