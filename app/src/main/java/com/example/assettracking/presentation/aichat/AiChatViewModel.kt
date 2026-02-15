@@ -75,7 +75,7 @@ class AiChatViewModel @Inject constructor(
 
     private val generativeModel = GenerativeModel(
         modelName = "gemini-2.5-flash",
-        apiKey = "AIzaSyCFYV0RkXxi_yAjpa2XKyCuog5r7vz82uc"
+        apiKey = "AIzaSyDtuBSiveaMde7GyEcOox3Yo3TG1ySAOYU"
     )
 
     private val okHttpClient = OkHttpClient()
