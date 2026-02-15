@@ -10,8 +10,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -70,6 +72,7 @@ fun AiChatScreen(
                         }
                     },
                     actions = {
+                        ModeMenu(current = state.mode, onSelect = { viewModel.setMode(it) })
                         IconButton(onClick = { viewModel.clearMessages() }) {
                             Icon(Icons.Default.Clear, "Clear Chat", tint = Color.White)
                         }
@@ -169,6 +172,35 @@ fun AiChatScreen(
         }
     }
 }
+@Composable
+private fun ModeMenu(current: AiMode, onSelect: (AiMode) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        TextButton(onClick = { expanded = true }) {
+            Text(
+                text = if (current == AiMode.Gemini) "Gemini" else "Offline",
+                color = Color.White
+            )
+            Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = Color.White)
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = { Text("Gemini") },
+                onClick = {
+                    expanded = false
+                    onSelect(AiMode.Gemini)
+                }
+            )
+            DropdownMenuItem(
+                text = { Text("Offline") },
+                onClick = {
+                    expanded = false
+                    onSelect(AiMode.Offline)
+                }
+            )
+        }
+    }
+}
 
 @Composable
 private fun MessageBubble(message: ChatMessage, onExecute: (String) -> Unit, onUndo: (String) -> Unit) {
@@ -238,36 +270,120 @@ private fun MessageBubble(message: ChatMessage, onExecute: (String) -> Unit, onU
 @Composable
 private fun TableCard(table: TableData, textColor: Color) {
     val scroll = rememberScrollState()
+    val headerBg = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+    val zebraA = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.32f)
+    val zebraB = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.14f)
+
     Column(
         modifier = Modifier
             .horizontalScroll(scroll)
-            .fillMaxWidth(),
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
+            .padding(8.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(headerBg, RoundedCornerShape(8.dp))
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
             table.columns.forEach { col ->
-                Text(
-                    col,
-                    color = textColor,
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
-                )
-            }
-        }
-        Divider(color = textColor.copy(alpha = 0.3f))
-        table.rows.forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                row.forEach { cell ->
+                Box(modifier = Modifier.widthIn(min = 120.dp, max = 220.dp)) {
                     Text(
-                        cell,
+                        col,
                         color = textColor,
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(vertical = 2.dp)
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
                     )
                 }
             }
         }
+
         if (table.rows.isEmpty()) {
-            Text("No rows", color = textColor, style = MaterialTheme.typography.bodySmall)
+            Text("No rows", color = textColor, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(8.dp))
+        } else {
+            table.rows.forEachIndexed { index, row ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(if (index % 2 == 0) zebraA else zebraB, RoundedCornerShape(6.dp))
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    row.forEachIndexed { colIndex, cell ->
+                        val columnName = table.columns.getOrNull(colIndex)?.lowercase().orEmpty()
+                        Box(modifier = Modifier.widthIn(min = 120.dp, max = 220.dp)) {
+                            when {
+                                isStatusColumn(columnName) -> StatusBadge(cell)
+                                isConditionColumn(columnName) -> ConditionBadge(cell)
+                                else -> Text(
+                                    cell,
+                                    color = textColor,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.padding(vertical = 2.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
+    }
+}
+
+@Composable
+private fun StatusBadge(text: String) {
+    val (bg, fg) = statusColors(text)
+    Surface(
+        color = bg,
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Text(
+            text = text,
+            color = fg,
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+        )
+    }
+}
+
+@Composable
+private fun ConditionBadge(text: String) {
+    val tone = when (text.lowercase()) {
+        "good", "ok", "fine", "working" -> Color(0xFF10B981)
+        "fair", "worn" -> Color(0xFFF59E0B)
+        "bad", "broken", "missing" -> Color(0xFFEF4444)
+        else -> MaterialTheme.colorScheme.primary
+    }
+    Surface(
+        color = tone.copy(alpha = 0.15f),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Text(
+            text = text,
+            color = tone,
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+        )
+    }
+}
+
+private fun isStatusColumn(columnName: String): Boolean {
+    return columnName.contains("status") || columnName.contains("state")
+}
+
+private fun isConditionColumn(columnName: String): Boolean {
+    return columnName.contains("condition")
+}
+
+@Composable
+private fun statusColors(status: String): Pair<Color, Color> {
+    return when (status.lowercase()) {
+        "at home" -> Color(0xFF10B981).copy(alpha = 0.18f) to Color(0xFF0F766E)
+        "at other location", "other location" -> Color(0xFFF59E0B).copy(alpha = 0.18f) to Color(0xFF92400E)
+        "missing" -> Color(0xFFEF4444).copy(alpha = 0.18f) to Color(0xFFB91C1C)
+        "not assigned", "unassigned" -> Color(0xFF3B82F6).copy(alpha = 0.18f) to Color(0xFF1D4ED8)
+        else -> MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) to MaterialTheme.colorScheme.primary
     }
 }

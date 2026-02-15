@@ -34,14 +34,19 @@ data class AiChatState(
     val isLoading: Boolean = false,
     val error: String? = null,
     val retryCount: Int = 0,
-    val continueCount: Int = 0
+    val continueCount: Int = 0,
+    val mode: AiMode = AiMode.Gemini
 )
+
+enum class AiMode { Gemini, Offline }
 
 @HiltViewModel
 class AiChatViewModel @Inject constructor(
     private val database: AssetTrackingDatabase,
     private val chatMessageDao: ChatMessageDao
 ) : ViewModel() {
+
+    private val fallbackService: LocalSqlFallbackService = LocalSqlFallbackServiceImpl()
 
     private val _uiState = MutableStateFlow(AiChatState())
     val uiState: StateFlow<AiChatState> = _uiState
@@ -106,50 +111,74 @@ class AiChatViewModel @Inject constructor(
             chatMessageDao.insert(ChatMessageEntity(messageId = messageId, text = userMessage, isUser = true, timestamp = userMsg.timestamp))
         }
 
-        _uiState.update { it.copy(isLoading = true, error = null) }
+        _uiState.update { it.copy(isLoading = true, error = null, retryCount = 0, continueCount = 0) }
 
         viewModelScope.launch {
+            val mode = _uiState.value.mode
+
+            if (mode == AiMode.Offline) {
+                // Offline mode: Use only local fallback engine, no Gemini calls
+                val fallbackSql = fallbackService.generate(userMessage)
+                if (fallbackSql != null) {
+                    handleSql(fallbackSql, messageId)
+                } else {
+                    handleError("No offline template matched this request.", messageId)
+                }
+                return@launch
+            }
+
+            // Gemini mode: Use only Gemini AI, no fallback on errors
             try {
                 val response = generativeModel.generateContent(
                     "$schemaPrompt\n\nUser: $userMessage\n\nGenerate SQL query:"
                 )
 
                 val sqlQuery = response.text?.trim() ?: throw Exception("No SQL generated")
-                val isWrite = sqlQuery.startsWith("INSERT", ignoreCase = true) ||
-                              sqlQuery.startsWith("UPDATE", ignoreCase = true) ||
-                              sqlQuery.startsWith("DELETE", ignoreCase = true)
-
-                if (isWrite) {
-                    // For write queries, hide raw SQL and show a friendly action card
-                    val displayText = "Action ready. Tap Execute to apply changes."
-                    val aiMsg = ChatMessage(
-                        id = "${messageId}_response",
-                        text = displayText,
-                        isUser = false,
-                        isWriteQuery = true,
-                        originalQuery = sqlQuery
-                    )
-                    chatMessageDao.insert(
-                        ChatMessageEntity(
-                            messageId = aiMsg.id,
-                            text = displayText,
-                            isUser = false,
-                            timestamp = aiMsg.timestamp,
-                            isWriteQuery = true,
-                            originalQuery = sqlQuery
-                        )
-                    )
-                    _uiState.update { it.copy(isLoading = false) }
-                } else {
-                    // For read queries, execute immediately
-                    executeQuery(sqlQuery, messageId)
-                }
+                handleSql(sqlQuery, messageId)
 
             } catch (e: Exception) {
                 handleError(e.message ?: "Unknown error", messageId)
             }
         }
     }
+
+    fun setMode(mode: AiMode) {
+        _uiState.update { it.copy(mode = mode) }
+    }
+
+    private suspend fun handleSql(sqlQuery: String, messageId: String) {
+        val isWrite = sqlQuery.startsWith("INSERT", ignoreCase = true) ||
+                sqlQuery.startsWith("UPDATE", ignoreCase = true) ||
+                sqlQuery.startsWith("DELETE", ignoreCase = true)
+
+        if (isWrite) {
+            // For write queries, hide raw SQL and show a friendly action card
+            val displayText = "Action ready. Tap Execute to apply changes."
+            val aiMsg = ChatMessage(
+                id = "${messageId}_response",
+                text = displayText,
+                isUser = false,
+                isWriteQuery = true,
+                originalQuery = sqlQuery
+            )
+            chatMessageDao.insert(
+                ChatMessageEntity(
+                    messageId = aiMsg.id,
+                    text = displayText,
+                    isUser = false,
+                    timestamp = aiMsg.timestamp,
+                    isWriteQuery = true,
+                    originalQuery = sqlQuery
+                )
+            )
+            _uiState.update { it.copy(isLoading = false) }
+        } else {
+            // For read queries, execute immediately
+            executeQuery(sqlQuery, messageId)
+        }
+    }
+
+    // localSqlFallback moved to LocalSqlFallbackEngine for unit testing
 
     private suspend fun executeQuery(sqlQuery: String, messageId: String) {
         try {
@@ -205,8 +234,15 @@ class AiChatViewModel @Inject constructor(
         val currentState = _uiState.value
         val newRetryCount = currentState.retryCount + 1
 
+        // In offline mode, do not call Gemini; just surface the error. (Offline and Gemini are completely distinct)
+        if (currentState.mode == AiMode.Offline) {
+            showFinalError(errorMsg)
+            return
+        }
+
+        // Gemini mode: Retry with Gemini only, no fallback
         if (newRetryCount <= 3) {
-            // Retry by asking AI again
+            // Retry by asking AI again (Gemini mode only)
             viewModelScope.launch {
                 try {
                     val response = generativeModel.generateContent(
@@ -291,8 +327,15 @@ class AiChatViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
+                // Optimistically mark as executed to avoid double taps while executing
+                _uiState.update { state ->
+                    val updatedMessages = state.messages.map {
+                        if (it.id == messageId) it.copy(queryExecuted = true) else it
+                    }
+                    state.copy(messages = updatedMessages)
+                }
+
                 database.openHelper.writableDatabase.execSQL(message.originalQuery!!)
-                // Update message as executed
                 chatMessageDao.insert(ChatMessageEntity(
                     messageId = "${messageId}_executed", 
                     text = "Query executed successfully.", 
@@ -300,14 +343,6 @@ class AiChatViewModel @Inject constructor(
                     timestamp = System.currentTimeMillis(),
                     isWriteQuery = false
                 ))
-                // Mark original as executed
-                // Since we can't update easily, we'll add a new message or handle in UI
-                _uiState.update { state ->
-                    val updatedMessages = state.messages.map { 
-                        if (it.id == messageId) it.copy(queryExecuted = true) else it 
-                    }
-                    state.copy(messages = updatedMessages)
-                }
             } catch (e: Exception) {
                 chatMessageDao.insert(ChatMessageEntity(
                     messageId = "${messageId}_error", 
@@ -316,6 +351,13 @@ class AiChatViewModel @Inject constructor(
                     timestamp = System.currentTimeMillis(),
                     isWriteQuery = false
                 ))
+                // Revert optimistic flag on failure
+                _uiState.update { state ->
+                    val updatedMessages = state.messages.map {
+                        if (it.id == messageId) it.copy(queryExecuted = false) else it
+                    }
+                    state.copy(messages = updatedMessages)
+                }
             }
         }
     }
