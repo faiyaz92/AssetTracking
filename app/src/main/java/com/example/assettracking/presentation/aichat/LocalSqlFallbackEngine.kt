@@ -12,9 +12,32 @@ class LocalSqlFallbackEngine {
         return generateSqlFromMessage(userMessage)
     }
 
-    fun generateOffline(userMessage: String, database: AssetTrackingDatabase): Pair<String?, String?> {
+    fun generateOffline(fullPrompt: String, database: AssetTrackingDatabase): Pair<String?, String?> {
+        // Extract user message from the full AI prompt
+        val userMessage = extractUserMessageFromPrompt(fullPrompt)
         val sql = generateSqlFromMessage(userMessage)
         return sql to null
+    }
+
+    private fun extractUserMessageFromPrompt(fullPrompt: String): String {
+        // Extract the user message from after the last "User: " until "Generate SQL query:"
+        val userMarker = "User: "
+        val queryMarker = "Generate SQL query:"
+        
+        val lastUserIndex = fullPrompt.lastIndexOf(userMarker)
+        if (lastUserIndex == -1) return fullPrompt // fallback
+        
+        val userMessageStart = lastUserIndex + userMarker.length
+        val queryIndex = fullPrompt.indexOf(queryMarker, userMessageStart)
+        
+        val userMessage = if (queryIndex != -1) {
+            fullPrompt.substring(userMessageStart, queryIndex).trim()
+        } else {
+            fullPrompt.substring(userMessageStart).trim()
+        }
+        
+        // Remove any trailing newlines
+        return userMessage.trim()
     }
 
     private fun generateSqlFromMessage(userMessage: String): String {
@@ -31,19 +54,56 @@ class LocalSqlFallbackEngine {
                 generateLocationInsertSql(userMessage)
             }
 
-            // Asset queries
-            message.matches(Regex("asset\\s+\\d+.*")) -> {
-                val assetId = message.substringAfter("asset ").substringBefore(" ").toIntOrNull() ?: 0
-                "SELECT a.id, a.name, a.details, a.condition, lb.name AS baseLocation, lc.name AS currentLocation FROM assets a LEFT JOIN locations lb ON a.baseRoomId = lb.id LEFT JOIN locations lc ON a.currentRoomId = lc.id WHERE a.id = $assetId"
+            // Asset queries - support both ID and name (must start with "asset")
+            message.matches(Regex("^asset\\s+.+")) && !message.contains("add asset") && !message.contains("create asset") -> {
+                val assetQuery = message.substringAfter("asset ").trim()
+                // Always search by name: exact match first, then heuristic
+                val escapedQuery = assetQuery.replace("'", "''")
+                "SELECT a.id, a.name, a.details, a.condition, lb.name AS baseLocation, lc.name AS currentLocation FROM assets a LEFT JOIN locations lb ON a.baseRoomId = lb.id LEFT JOIN locations lc ON a.currentRoomId = lc.id WHERE a.name = '$escapedQuery' UNION " +
+                "SELECT a.id, a.name, a.details, a.condition, lb.name AS baseLocation, lc.name AS currentLocation FROM assets a LEFT JOIN locations lb ON a.baseRoomId = lb.id LEFT JOIN locations lc ON a.currentRoomId = lc.id WHERE a.name LIKE '%$escapedQuery%' AND a.name != '$escapedQuery' LIMIT 5"
             }
 
             message.contains("all assets") || message.contains("show assets") || message.contains("list assets") ->
                 "SELECT a.id, a.name, a.details, a.condition, l.name AS location FROM assets a LEFT JOIN locations l ON a.currentRoomId = l.id"
 
-            // Location queries
-            message.matches(Regex("where is asset\\s+\\d+.*")) || message.contains("location of asset") -> {
-                val assetId = Regex("\\d+").find(message)?.value?.toIntOrNull() ?: 0
-                "SELECT a.id, a.name, l.name AS location, l.locationCode FROM assets a LEFT JOIN locations l ON a.currentRoomId = l.id WHERE a.id = $assetId"
+            // Location queries - "where is X" treats X as asset name
+            message.matches(Regex("^where\\s+is\\s+.+")) && !message.contains("asset") && !message.contains("location") -> {
+                val assetQuery = message.substringAfter("is ").trim()
+                // Remove trailing question marks
+                val cleanQuery = assetQuery.removeSuffix("?").trim()
+                // Search by name: exact match first, then heuristic
+                val escapedQuery = cleanQuery.replace("'", "''")
+                "SELECT a.id, a.name, l.name AS location, l.locationCode FROM assets a LEFT JOIN locations l ON a.currentRoomId = l.id WHERE a.name = '$escapedQuery' UNION " +
+                "SELECT a.id, a.name, l.name AS location, l.locationCode FROM assets a LEFT JOIN locations l ON a.currentRoomId = l.id WHERE a.name LIKE '%$escapedQuery%' AND a.name != '$escapedQuery' LIMIT 5"
+            }
+
+            // Location queries - flexible "where" patterns (excluding "where is")
+            message.matches(Regex("^where\\s+(?!is\\s).*")) && !message.contains("location") && !message.matches(Regex("^where\\s+is\\s+location\\s+.+")) -> {
+                val query = message.substringAfter("where ").trim()
+                // Remove trailing question marks
+                val cleanQuery = query.removeSuffix("?").trim()
+                // Search by name: exact match first, then heuristic
+                val escapedQuery = cleanQuery.replace("'", "''")
+                "SELECT a.id, a.name, l.name AS location, l.locationCode FROM assets a LEFT JOIN locations l ON a.currentRoomId = l.id WHERE a.name = '$escapedQuery' UNION " +
+                "SELECT a.id, a.name, l.name AS location, l.locationCode FROM assets a LEFT JOIN locations l ON a.currentRoomId = l.id WHERE a.name LIKE '%$escapedQuery%' AND a.name != '$escapedQuery' LIMIT 5"
+            }
+
+            // "X where" or "X where?" patterns
+            message.matches(Regex(".+\\s+where\\??$")) && !message.contains("add") && !message.contains("create") && !message.contains("move") -> {
+                val query = message.substringBefore(" where").trim()
+                // Search by name: exact match first, then heuristic
+                val escapedQuery = query.replace("'", "''")
+                "SELECT a.id, a.name, l.name AS location, l.locationCode FROM assets a LEFT JOIN locations l ON a.currentRoomId = l.id WHERE a.name = '$escapedQuery' UNION " +
+                "SELECT a.id, a.name, l.name AS location, l.locationCode FROM assets a LEFT JOIN locations l ON a.currentRoomId = l.id WHERE a.name LIKE '%$escapedQuery%' AND a.name != '$escapedQuery' LIMIT 5"
+            }
+
+            // Location queries - support both ID and name
+            (message.matches(Regex("where\\s+is\\s+asset\\s+.+")) || message.matches(Regex("where\\s+asset\\s+.+")) || message.contains("location of asset")) && !message.contains("add asset") && !message.contains("create asset") -> {
+                val assetQuery = message.substringAfter("asset ").trim()
+                // Always search by name: exact match first, then heuristic
+                val escapedQuery = assetQuery.replace("'", "''")
+                "SELECT a.id, a.name, l.name AS location, l.locationCode FROM assets a LEFT JOIN locations l ON a.currentRoomId = l.id WHERE a.name = '$escapedQuery' UNION " +
+                "SELECT a.id, a.name, l.name AS location, l.locationCode FROM assets a LEFT JOIN locations l ON a.currentRoomId = l.id WHERE a.name LIKE '%$escapedQuery%' AND a.name != '$escapedQuery' LIMIT 5"
             }
 
             message.contains("all locations") || message.contains("show locations") || message.contains("list locations") ->
@@ -63,13 +123,19 @@ class LocalSqlFallbackEngine {
                 "SELECT a.id, a.name, a.type, l.name AS location, a.createdAt, a.finishedAt FROM audits a LEFT JOIN locations l ON a.locationId = l.id ORDER BY a.createdAt DESC"
 
             // Search queries
-            message.length >= 4 && !message.contains(" ") -> {
-                // Single word search - could be asset name or location
-                "SELECT 'Asset' AS type, a.id, a.name, l.name AS location FROM assets a LEFT JOIN locations l ON a.currentRoomId = l.id WHERE a.name LIKE '%$userMessage%' UNION SELECT 'Location' AS type, l.id, l.name, NULL FROM locations l WHERE l.name LIKE '%$userMessage%'"
+            message.length >= 2 -> {
+                val escapedMessage = userMessage.replace("'", "''") // Escape single quotes for SQL
+                // Always try exact match first, then partial matches as fallback
+                "SELECT 'Asset' AS type, a.id, a.name, l.name AS location, CASE WHEN a.name = '$escapedMessage' THEN 1 ELSE 2 END AS priority FROM assets a LEFT JOIN locations l ON a.currentRoomId = l.id WHERE a.name LIKE '%$escapedMessage%' UNION " +
+                "SELECT 'Location' AS type, l.id, l.name, NULL, CASE WHEN l.name = '$escapedMessage' THEN 1 ELSE 2 END AS priority FROM locations l WHERE l.name LIKE '%$escapedMessage%' " +
+                "ORDER BY priority, type, name"
             }
 
-            // Default fallback
-            else -> "SELECT * FROM assets WHERE name LIKE '%' || '$userMessage' || '%' LIMIT 5"
+            // Default fallback - partial match
+            else -> {
+                val escapedMessage = userMessage.replace("'", "''") // Escape single quotes for SQL
+                "SELECT * FROM assets WHERE name LIKE '%$escapedMessage%' LIMIT 5"
+            }
         }
     }
 

@@ -301,6 +301,19 @@ class AiChatViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
+            // Insert user message first
+            val userMsg = ChatMessage(
+                id = messageId,
+                text = userMessage,
+                isUser = true
+            )
+            chatMessageDao.insert(ChatMessageEntity(
+                messageId = userMsg.id,
+                text = userMsg.text,
+                isUser = true,
+                timestamp = userMsg.timestamp
+            ))
+
             val mode = _uiState.value.mode
 
             if (mode == AiMode.Offline) {
@@ -487,14 +500,20 @@ class AiChatViewModel @Inject constructor(
     }
 
     private fun handleError(errorMsg: String, messageId: String) {
-        showFinalError(errorMsg)
-    }
-
-    private fun showFinalError(errorMsg: String) {
-        _uiState.update { it.copy(
-            error = "Sorry, I couldn't process that request. Please try again.",
-            isLoading = false
-        ) }
+        viewModelScope.launch {
+            val aiMsg = ChatMessage(
+                id = "${messageId}_error",
+                text = "Sorry, I couldn't process that request. Please try again.",
+                isUser = false
+            )
+            chatMessageDao.insert(ChatMessageEntity(
+                messageId = aiMsg.id,
+                text = aiMsg.text,
+                isUser = false,
+                timestamp = aiMsg.timestamp
+            ))
+            _uiState.update { it.copy(isLoading = false) }
+        }
     }
 
     private fun encodeTable(columns: List<String>, rows: List<List<String>>): String {
