@@ -206,6 +206,22 @@ class AiChatViewModel @Inject constructor(
                         return@launch
                     }
                 }
+                // Special handling for "where is [term]"
+                val whereIsMatch = Regex("where\\s+is\\s+(.+)", RegexOption.IGNORE_CASE).find(trimmed)
+                if (whereIsMatch != null) {
+                    val term = whereIsMatch.groupValues[1].trim()
+                    if (term.isNotBlank()) {
+                        val exactCount = database.openHelper.writableDatabase.query(SimpleSQLiteQuery("SELECT COUNT(*) FROM assets WHERE LOWER(name) = LOWER('$term') OR CAST(id AS TEXT) = '$term'")).use { it.moveToFirst(); it.getInt(0) }
+                        if (exactCount > 0) {
+                            val sql = "SELECT a.id, a.name, a.details, a.condition, lb.name AS baseLocation, lc.name AS currentLocation, CASE WHEN a.currentRoomId IS NULL THEN 'Missing' WHEN a.currentRoomId = a.baseRoomId THEN 'At Home' ELSE 'At Other Location' END AS status FROM assets a LEFT JOIN locations lb ON a.baseRoomId = lb.id LEFT JOIN locations lc ON a.currentRoomId = lc.id WHERE LOWER(a.name) = LOWER('$term') OR CAST(a.id AS TEXT) = '$term' LIMIT 1"
+                            handleSql(sql, messageId)
+                            return@launch
+                        } else {
+                            handleError("No exact match found for '$term'.", messageId)
+                            return@launch
+                        }
+                    }
+                }
                 // Other offline queries
                 val fallbackSql = fallbackEngine.generate(userMessage)
                 if (fallbackSql != null) {
