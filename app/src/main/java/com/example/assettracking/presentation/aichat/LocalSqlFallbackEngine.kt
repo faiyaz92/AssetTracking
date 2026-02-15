@@ -106,7 +106,11 @@ class LocalSqlFallbackEngine {
                 "SELECT l.id, l.name, l.locationCode, COUNT(a.id) as asset_count FROM locations l LEFT JOIN assets a ON l.id = a.currentRoomId GROUP BY l.id"
 
             // Missing assets queries
-            message.contains("missing assets") || message.contains("list of missing assets") || message.contains("show missing assets") ->
+            message.matches(Regex(".*missing (?:asset|assets).*(?:of|in|at|for)\\s+(.+)")) -> {
+                val location = Regex(".*missing (?:asset|assets).*(?:of|in|at|for)\\s+(.+)").find(message)?.groupValues?.get(1)?.trim()
+                "SELECT a.id, a.name, a.details, a.condition, bl.name AS base_location FROM assets a LEFT JOIN locations bl ON a.baseRoomId = bl.id WHERE a.baseRoomId IS NOT NULL AND a.currentRoomId IS NULL AND (bl.name LIKE '%$location%' OR bl.locationCode LIKE '%$location%')"
+            }
+            message.contains("missing assets") || message.contains("list of missing assets") || message.contains("show missing assets") || message.contains("missing asset") ->
                 "SELECT a.id, a.name, a.details, a.condition, bl.name AS base_location FROM assets a LEFT JOIN locations bl ON a.baseRoomId = bl.id WHERE a.baseRoomId IS NOT NULL AND a.currentRoomId IS NULL"
 
             // Movement/audit queries
