@@ -591,7 +591,9 @@ class LocalSqlFallbackEngine {
                     val sql = "SELECT a.id, a.name, a.details, a.condition, lb.name AS baseLocation, lc.name AS currentLocation, CASE WHEN a.currentRoomId IS NULL THEN 'Missing' WHEN a.currentRoomId = a.baseRoomId THEN 'At Home' ELSE 'At Other Location' END AS status FROM assets a LEFT JOIN locations lb ON a.baseRoomId = lb.id LEFT JOIN locations lc ON a.currentRoomId = lc.id WHERE LOWER(a.name) = LOWER('$term') OR CAST(a.id AS TEXT) = '$term' LIMIT 1"
                     return sql to null
                 } else {
-                    return null to "No exact match found for '$term'."
+                    // Heuristic: search for substring matches
+                    val sql = "SELECT a.id, a.name, a.details, a.condition, lb.name AS baseLocation, lc.name AS currentLocation, CASE WHEN a.currentRoomId IS NULL THEN 'Missing' WHEN a.currentRoomId = a.baseRoomId THEN 'At Home' ELSE 'At Other Location' END AS status FROM assets a LEFT JOIN locations lb ON a.baseRoomId = lb.id LEFT JOIN locations lc ON a.currentRoomId = lc.id WHERE LOWER(a.name) LIKE LOWER('%$term%') OR CAST(a.id AS TEXT) LIKE '%$term%' ORDER BY a.id DESC LIMIT 10"
+                    return sql to null
                 }
             }
         }

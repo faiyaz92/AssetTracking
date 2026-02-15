@@ -14,6 +14,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
+import okhttp3.*
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import org.json.JSONObject
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 
 data class ChatMessage(
     val id: String,
@@ -46,7 +51,7 @@ data class AiChatState(
     val lastOptions: List<OptionItem> = emptyList()
 )
 
-enum class AiMode { Gemini, Offline }
+enum class AiMode { Gemini, Offline, Ollama }
 
 @HiltViewModel
 class AiChatViewModel @Inject constructor(
@@ -65,6 +70,8 @@ class AiChatViewModel @Inject constructor(
         modelName = "gemini-2.5-flash",
         apiKey = "AIzaSyCFYV0RkXxi_yAjpa2XKyCuog5r7vz82uc"
     )
+
+    private val okHttpClient = OkHttpClient()
 
     private val schemaPrompt = """
         You are an AI assistant for an Asset Tracking system. Rely on the database schema (tables and columns) to infer intent, even when the user gives very short or vague prompts. Do not limit yourself to the examples; pick the most relevant query based on column meanings.
@@ -98,6 +105,25 @@ class AiChatViewModel @Inject constructor(
 
         Always respond with one or more valid SQLite queries, separated by semicolons if multiple. No extra text.
     """.trimIndent()
+
+    private suspend fun callOllama(prompt: String): String {
+        val json = """{"model": "llama3.2", "prompt": "$prompt", "stream": false}"""
+        val requestBody = RequestBody.create("application/json".toMediaTypeOrNull(), json)
+        val request = Request.Builder()
+            .url("http://10.0.2.2:11434/api/generate")
+            .post(requestBody)
+            .build()
+        return withContext(Dispatchers.IO) {
+            val response = okHttpClient.newCall(request).execute()
+            if (!response.isSuccessful) throw Exception("Ollama not running. Please install Ollama and run 'ollama serve'. Error: ${response.code}")
+            response.body?.string() ?: throw Exception("Empty response from Ollama")
+        }
+    }
+
+    private fun parseOllamaResponse(json: String): String {
+        val obj = JSONObject(json)
+        return obj.getString("response").trim()
+    }
 
     init {
         viewModelScope.launch {
@@ -204,6 +230,18 @@ class AiChatViewModel @Inject constructor(
                     handleSql(sql, messageId)
                 } else {
                     handleError("No offline template matched this request.", messageId)
+                }
+                return@launch
+            }
+
+            if (mode == AiMode.Ollama) {
+                // Ollama mode
+                try {
+                    val response = callOllama("$schemaPrompt\n\nUser: $userMessage\n\nGenerate SQL query:")
+                    val sqlQuery = parseOllamaResponse(response)
+                    handleSql(sqlQuery, messageId)
+                } catch (e: Exception) {
+                    handleError(e.message ?: "Ollama error", messageId)
                 }
                 return@launch
             }

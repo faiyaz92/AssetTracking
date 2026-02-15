@@ -186,7 +186,11 @@ private fun ModeMenu(current: AiMode, onSelect: (AiMode) -> Unit) {
     Box {
         TextButton(onClick = { expanded = true }) {
             Text(
-                text = if (current == AiMode.Gemini) "Gemini" else "Offline",
+                text = when (current) {
+                    AiMode.Gemini -> "Gemini"
+                    AiMode.Offline -> "Offline"
+                    AiMode.Ollama -> "Ollama"
+                },
                 color = Color.White
             )
             Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = Color.White)
@@ -204,6 +208,13 @@ private fun ModeMenu(current: AiMode, onSelect: (AiMode) -> Unit) {
                 onClick = {
                     expanded = false
                     onSelect(AiMode.Offline)
+                }
+            )
+            DropdownMenuItem(
+                text = { Text("Ollama") },
+                onClick = {
+                    expanded = false
+                    onSelect(AiMode.Ollama)
                 }
             )
         }
