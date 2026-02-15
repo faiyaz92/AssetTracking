@@ -111,19 +111,6 @@ class LocalSqlFallbackEngine {
                                     "WHERE a.id = $id"
                         }
 
-                        // Simple "where is [term]" lookup
-                        whereIsMatch != null -> {
-                            val term = safe(whereIsMatch.groupValues[1])
-                            "SELECT a.id, a.name, a.details, a.condition, lb.name AS baseLocation, lc.name AS currentLocation, " +
-                                    "CASE WHEN a.currentRoomId IS NULL THEN 'Missing' " +
-                                    "WHEN a.currentRoomId = a.baseRoomId THEN 'At Home' ELSE 'At Other Location' END AS status " +
-                                    "FROM assets a " +
-                                    "LEFT JOIN locations lb ON a.baseRoomId = lb.id " +
-                                    "LEFT JOIN locations lc ON a.currentRoomId = lc.id " +
-                                    "WHERE a.name LIKE '${safeLike(term)}' OR CAST(a.id AS TEXT) LIKE '${safeLike(term)}' " +
-                                    "ORDER BY CASE WHEN LOWER(a.name) = LOWER('$term') THEN 1 WHEN CAST(a.id AS TEXT) = '$term' THEN 1 ELSE 2 END, a.id DESC LIMIT 1"
-                        }
-
                         // Find asset by token/id/name with disambiguation and best guess
                         assetToken != null || whereIsMatch != null || findMatch != null || text.contains("find asset") || text.contains("where is") -> {
                                 val termRaw = when {
