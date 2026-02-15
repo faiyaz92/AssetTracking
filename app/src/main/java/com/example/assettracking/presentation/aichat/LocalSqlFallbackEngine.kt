@@ -63,7 +63,7 @@ class LocalSqlFallbackEngine {
                 "SELECT a.id, a.name, a.details, a.condition, lb.name AS baseLocation, lc.name AS currentLocation FROM assets a LEFT JOIN locations lb ON a.baseRoomId = lb.id LEFT JOIN locations lc ON a.currentRoomId = lc.id WHERE a.name LIKE '%$escapedQuery%' AND a.name != '$escapedQuery' LIMIT 5"
             }
 
-            message.contains("all assets") || message.contains("show assets") || message.contains("list assets") ->
+            message.contains("all assets") || message.contains("show assets") || message.contains("list assets") || message.contains("asset list") || message.contains("list of assets") ->
                 "SELECT a.id, a.name, a.details, a.condition, l.name AS location FROM assets a LEFT JOIN locations l ON a.currentRoomId = l.id"
 
             // Location queries - "where/wer is X" treats X as asset name
@@ -102,8 +102,12 @@ class LocalSqlFallbackEngine {
                 "SELECT a.id, a.name, l.name AS location, l.locationCode FROM assets a LEFT JOIN locations l ON a.currentRoomId = l.id WHERE a.name LIKE '%$escapedQuery%' AND a.name != '$escapedQuery' LIMIT 5"
             }
 
-            message.contains("all locations") || message.contains("show locations") || message.contains("list locations") ->
+            message.contains("all locations") || message.contains("show locations") || message.contains("list locations") || message.contains("location list") || message.contains("list of locations") ->
                 "SELECT l.id, l.name, l.locationCode, COUNT(a.id) as asset_count FROM locations l LEFT JOIN assets a ON l.id = a.currentRoomId GROUP BY l.id"
+
+            // Missing assets queries
+            message.contains("missing assets") || message.contains("list of missing assets") || message.contains("show missing assets") ->
+                "SELECT a.id, a.name, a.details, a.condition, bl.name AS base_location FROM assets a LEFT JOIN locations bl ON a.baseRoomId = bl.id WHERE a.baseRoomId IS NOT NULL AND a.currentRoomId IS NULL"
 
             // Movement/audit queries
             message.matches(Regex("move asset\\s+\\d+.*to.*\\d+.*")) -> {
