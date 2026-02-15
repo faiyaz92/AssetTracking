@@ -46,6 +46,8 @@ class AiChatViewModel @Inject constructor(
     private val chatMessageDao: ChatMessageDao
 ) : ViewModel() {
 
+    private var lastUserMessage: String? = null
+
     private val fallbackService: LocalSqlFallbackService = LocalSqlFallbackServiceImpl()
 
     private val _uiState = MutableStateFlow(AiChatState())
@@ -104,6 +106,7 @@ class AiChatViewModel @Inject constructor(
     """.trimIndent()
 
     fun sendMessage(userMessage: String) {
+        lastUserMessage = userMessage
         val messageId = System.currentTimeMillis().toString()
         val userMsg = ChatMessage(messageId, userMessage, true)
 
@@ -241,7 +244,7 @@ class AiChatViewModel @Inject constructor(
         }
 
         // Gemini mode: Retry with Gemini only, no fallback
-        if (newRetryCount <= 3) {
+        if (newRetryCount <= 100) {
             // Retry by asking AI again (Gemini mode only)
             viewModelScope.launch {
                 try {
@@ -251,8 +254,8 @@ class AiChatViewModel @Inject constructor(
                     val correctedSql = response.text?.trim() ?: throw Exception("No corrected SQL")
                     executeQuery(correctedSql, messageId)
                 } catch (e: Exception) {
-                    if (newRetryCount >= 3) {
-                        showFinalError("Failed after 3 retries: ${e.message}")
+                    if (newRetryCount >= 100) {
+                        showFinalError("Failed after 100 retries: ${e.message}")
                     } else {
                         _uiState.update { it.copy(retryCount = newRetryCount) }
                         handleError(e.message ?: "Retry failed", messageId)
@@ -266,16 +269,16 @@ class AiChatViewModel @Inject constructor(
 
     private fun showFinalError(errorMsg: String) {
         val continueCount = _uiState.value.continueCount
-        if (continueCount < 3) {
+        if (continueCount < 100) {
             _uiState.update { it.copy(
-                error = "Asset Tracing AI is working so long. If you want to continue, click Continue. ($errorMsg)",
+                error = "Asset Tracing AI is working so long. If you want to continue, click Continue.",
                 isLoading = false,
                 retryCount = 0,
                 continueCount = continueCount + 1
             ) }
         } else {
             _uiState.update { it.copy(
-                error = "Error: Try a different way. $errorMsg",
+                error = "Error: Try a different way.",
                 isLoading = false
             ) }
         }
@@ -318,7 +321,20 @@ class AiChatViewModel @Inject constructor(
     }
 
     fun continueChat() {
-        _uiState.update { it.copy(error = null, retryCount = 0) }
+        val message = lastUserMessage ?: return
+        _uiState.update { it.copy(error = null, isLoading = true) }
+        // Retry the Gemini call for the last message
+        viewModelScope.launch {
+            try {
+                val response = generativeModel.generateContent(
+                    "$schemaPrompt\n\nUser: $message\n\nGenerate SQL query:"
+                )
+                val sqlQuery = response.text?.trim() ?: throw Exception("No SQL generated")
+                handleSql(sqlQuery, System.currentTimeMillis().toString())
+            } catch (e: Exception) {
+                handleError(e.message ?: "Unknown error", System.currentTimeMillis().toString())
+            }
+        }
     }
 
     fun executeQuery(messageId: String) {
@@ -390,5 +406,9 @@ class AiChatViewModel @Inject constructor(
             chatMessageDao.clearAll()
             _uiState.update { it.copy(messages = emptyList(), error = null, isLoading = false, retryCount = 0, continueCount = 0) }
         }
+    }
+
+    fun dismissError() {
+        _uiState.update { it.copy(error = null) }
     }
 }

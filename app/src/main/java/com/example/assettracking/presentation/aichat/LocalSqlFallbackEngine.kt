@@ -27,7 +27,7 @@ class LocalSqlFallbackEngine {
         val roomMatch = Regex("room\\s+([a-z0-9_-]+)").find(text)
         val locationCodeMatch = Regex("code\\s+([a-z0-9_-]+)").find(text)
         val locationFindMatch = Regex("location\\s+([\\w-]+)").find(text)
-        val locationAliasMatch = Regex("loc\\s+([\\w-]+)").find(text)
+        val locationAliasMatch = Regex("loc\\s*([\\w-]+)").find(text)
         val singleToken = text.trim().takeIf { it.isNotBlank() && !it.contains(" ") }
         val collapsedToken = text.trim().split(Regex("\\s+")).takeIf { it.size == 2 && it.all { part -> part.isNotBlank() } }?.joinToString(separator = "")
         val countRequested = text.contains("count") || text.contains("how many")
@@ -50,6 +50,18 @@ class LocalSqlFallbackEngine {
         return when {
             // List all assets with status and locations
             text.contains("list") && text.contains("asset") -> {
+                "SELECT a.id, a.name, a.details, a.condition, a.baseRoomId, a.currentRoomId, " +
+                        "lb.name AS baseLocation, lc.name AS currentLocation, " +
+                        "CASE WHEN a.currentRoomId IS NULL THEN 'Missing' " +
+                        "WHEN a.currentRoomId = a.baseRoomId THEN 'At Home' ELSE 'At Other Location' END AS status " +
+                        "FROM assets a " +
+                        "LEFT JOIN locations lb ON a.baseRoomId = lb.id " +
+                        "LEFT JOIN locations lc ON a.currentRoomId = lc.id " +
+                        "ORDER BY a.id DESC"
+            }
+
+            // General asset query (e.g., "asset", "assets")
+            text.contains("asset") && !text.contains("move") && !text.contains("add") && !text.contains("list") && !text.contains("count") && !text.contains("status") && !text.contains("missing") && !text.contains("history") && !text.contains("recent") && !text.contains("never") && !text.contains("base") && !text.contains("code") && !text.contains("detail") && assetToken == null && whereIsMatch == null && findMatch == null -> {
                 "SELECT a.id, a.name, a.details, a.condition, a.baseRoomId, a.currentRoomId, " +
                         "lb.name AS baseLocation, lc.name AS currentLocation, " +
                         "CASE WHEN a.currentRoomId IS NULL THEN 'Missing' " +
@@ -308,6 +320,11 @@ class LocalSqlFallbackEngine {
             // Missing assets
             text.contains("missing") && text.contains("asset") -> {
                 "SELECT a.id, a.name, a.details, a.baseRoomId, a.currentRoomId FROM assets a WHERE a.currentRoomId IS NULL"
+            }
+
+            // General location query (e.g., "location", "locations")
+            text.contains("location") && !text.contains("add") && !text.contains("list") && !text.contains("children") && locationFindMatch == null && locationAliasMatch == null -> {
+                "SELECT id, name, description, locationCode, parentId FROM locations ORDER BY id DESC"
             }
 
             // Location details / lookup

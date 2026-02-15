@@ -134,8 +134,16 @@ fun AiChatScreen(
                             horizontalArrangement = Arrangement.End
                         ) {
                             if (state.error!!.contains("continue")) {
+                                TextButton(onClick = { viewModel.dismissError() }) {
+                                    Text("Cancel")
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
                                 TextButton(onClick = { viewModel.continueChat() }) {
                                     Text("Continue")
+                                }
+                            } else {
+                                TextButton(onClick = { viewModel.dismissError() }) {
+                                    Text("OK")
                                 }
                             }
                         }
