@@ -53,7 +53,7 @@ data class AiChatState(
     val messages: List<ChatMessage> = emptyList(),
     val isLoading: Boolean = false,
     val error: String? = null,
-    val mode: AiMode = AiMode.Gemini,
+    val mode: AiMode = AiMode.Offline,
     val lastOptions: List<OptionItem> = emptyList()
 )
 
@@ -482,7 +482,9 @@ class AiChatViewModel @Inject constructor(
                         )
                     )
                 } else {
-                    // No matches, don't show message
+                    // No results found
+                    val aiMsg = ChatMessage("${messageId}_response", "No results found for your query.", false)
+                    chatMessageDao.insert(ChatMessageEntity(messageId = aiMsg.id, text = aiMsg.text, isUser = false, timestamp = aiMsg.timestamp))
                 }
                 _uiState.update { it.copy(isLoading = false) }
             } else {

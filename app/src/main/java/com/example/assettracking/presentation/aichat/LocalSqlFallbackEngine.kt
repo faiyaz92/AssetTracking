@@ -66,9 +66,15 @@ class LocalSqlFallbackEngine {
             message.contains("all assets") || message.contains("show assets") || message.contains("list assets") ->
                 "SELECT a.id, a.name, a.details, a.condition, l.name AS location FROM assets a LEFT JOIN locations l ON a.currentRoomId = l.id"
 
-            // Location queries - "where is X" treats X as asset name
-            message.matches(Regex("^where\\s+is\\s+.+")) && !message.contains("asset") && !message.contains("location") -> {
-                val assetQuery = message.substringAfter("is ").trim()
+            // Location queries - "where/wer is X" treats X as asset name
+            (message.matches(Regex("^(where|wer)\\s+is\\s+.+")) || message.matches(Regex("^(where|wer)\\s+.+"))) && !message.contains("asset") && !message.contains("location") && !message.matches(Regex("^(where|wer)\\s+is\\s+(location|asset)\\s+.+")) -> {
+                val isWhereIs = message.contains(" is ")
+                val assetQuery = if (isWhereIs) {
+                    message.substringAfter(" is ").trim()
+                } else {
+                    // Remove "where " or "wer " from start
+                    message.substringAfter(" ").trim()
+                }
                 // Remove trailing question marks
                 val cleanQuery = assetQuery.removeSuffix("?").trim()
                 // Search by name: exact match first, then heuristic
@@ -77,20 +83,10 @@ class LocalSqlFallbackEngine {
                 "SELECT a.id, a.name, l.name AS location, l.locationCode FROM assets a LEFT JOIN locations l ON a.currentRoomId = l.id WHERE a.name LIKE '%$escapedQuery%' AND a.name != '$escapedQuery' LIMIT 5"
             }
 
-            // Location queries - flexible "where" patterns (excluding "where is")
-            message.matches(Regex("^where\\s+(?!is\\s).*")) && !message.contains("location") && !message.matches(Regex("^where\\s+is\\s+location\\s+.+")) -> {
-                val query = message.substringAfter("where ").trim()
-                // Remove trailing question marks
-                val cleanQuery = query.removeSuffix("?").trim()
-                // Search by name: exact match first, then heuristic
-                val escapedQuery = cleanQuery.replace("'", "''")
-                "SELECT a.id, a.name, l.name AS location, l.locationCode FROM assets a LEFT JOIN locations l ON a.currentRoomId = l.id WHERE a.name = '$escapedQuery' UNION " +
-                "SELECT a.id, a.name, l.name AS location, l.locationCode FROM assets a LEFT JOIN locations l ON a.currentRoomId = l.id WHERE a.name LIKE '%$escapedQuery%' AND a.name != '$escapedQuery' LIMIT 5"
-            }
-
-            // "X where" or "X where?" patterns
-            message.matches(Regex(".+\\s+where\\??$")) && !message.contains("add") && !message.contains("create") && !message.contains("move") -> {
-                val query = message.substringBefore(" where").trim()
+            // "X where/wer" or "X where?/wer?" patterns
+            message.matches(Regex(".+\\s+(where|wer)\\??$")) && !message.contains("add") && !message.contains("create") && !message.contains("move") -> {
+                // Remove " where", " wer", " where?", " wer?" from end
+                val query = message.replace(Regex("\\s+(where|wer)\\??$"), "").trim()
                 // Search by name: exact match first, then heuristic
                 val escapedQuery = query.replace("'", "''")
                 "SELECT a.id, a.name, l.name AS location, l.locationCode FROM assets a LEFT JOIN locations l ON a.currentRoomId = l.id WHERE a.name = '$escapedQuery' UNION " +
@@ -98,7 +94,7 @@ class LocalSqlFallbackEngine {
             }
 
             // Location queries - support both ID and name
-            (message.matches(Regex("where\\s+is\\s+asset\\s+.+")) || message.matches(Regex("where\\s+asset\\s+.+")) || message.contains("location of asset")) && !message.contains("add asset") && !message.contains("create asset") -> {
+            (message.matches(Regex("(where|wer)\\s+is\\s+asset\\s+.+")) || message.matches(Regex("(where|wer)\\s+asset\\s+.+")) || message.contains("location of asset")) && !message.contains("add asset") && !message.contains("create asset") -> {
                 val assetQuery = message.substringAfter("asset ").trim()
                 // Always search by name: exact match first, then heuristic
                 val escapedQuery = assetQuery.replace("'", "''")
