@@ -55,7 +55,13 @@ class LocalModelManager(private val context: Context) {
         val targetFile = fileFor(model)
         val tmpFile = File(modelsDir, "${info.fileName}.part")
 
-        val request = Request.Builder().url(info.downloadUrl).build()
+        val request = Request.Builder()
+            .url(info.downloadUrl)
+            .addHeader("User-Agent", "curl/7.68.0")
+            .addHeader("Accept", "*/*")
+            .addHeader("Referer", "https://huggingface.co/")
+            .addHeader("Accept-Encoding", "identity")
+            .build()
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) throw IOException("Download failed: ${response.code}")
 
