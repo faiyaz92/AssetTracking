@@ -138,3 +138,8 @@ class LocalMediaPipeSqlAssistant(
         val assetKeywords = listOf("asset", "location", "room", "audit", "movement", "track", "find", "where", "show", "list", "add", "create", "move", "update", "delete", "inventory", "equipment", "device")
         return assetKeywords.any { question.contains(it) } || question.matches(Regex("\\d+")) // Numbers might be IDs
     }
+
+    override fun close() {
+        llmInference.close()
+    }
+}

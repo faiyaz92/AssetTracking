@@ -319,29 +319,6 @@ class AiChatViewModel @Inject constructor(
 
             val mode = _uiState.value.mode
 
-            if (mode == AiMode.Offline) {
-                // Offline mode using local SQL generation
-                try {
-                    val sqlQuery = LocalSqlFallbackEngine().generateOffline("$schemaPrompt\n\nUser: $userMessage\n\nGenerate SQL query:", database)
-                    handleSql(sqlQuery.first ?: "SELECT * FROM assets LIMIT 5", messageId)
-                } catch (e: Exception) {
-                    handleError(e.message ?: "Offline mode error", messageId)
-                }
-                return@launch
-            }
-
-            if (mode == AiMode.Ollama) {
-                // Ollama mode
-                try {
-                    val response = callOllama("$schemaPrompt\n\nUser: $userMessage\n\nGenerate SQL query:")
-                    val sqlQuery = parseOllamaResponse(response)
-                    handleSql(sqlQuery, messageId)
-                } catch (e: Exception) {
-                    handleError(e.message ?: "Ollama error", messageId)
-                }
-                return@launch
-            }
-
             if (mode == AiMode.OnDevice) {
                 // On-device mode
                 try {
@@ -381,7 +358,7 @@ class AiChatViewModel @Inject constructor(
                             }
 
                             // Proceed with asset-related query
-                            var sqlQuery = assistant.generateSql(userMessage)
+                            var sqlQuery = assistant.generateSqlWithRetry(userMessage)
                             var data: TableData? = null
                             var error: String? = null
                             var retryCount = 0
@@ -419,7 +396,7 @@ class AiChatViewModel @Inject constructor(
                                     timestamp = aiMsg.timestamp
                                 ))
                             } else if (data != null) {
-                                handleIntelligentResponse(data, userQuestion, messageId, modelAsset)
+                                handleIntelligentResponse(data, userMessage, messageId, modelAsset)
                             }
                         }
                         OnDeviceModel.SqlTemplate -> {
@@ -526,8 +503,7 @@ class AiChatViewModel @Inject constructor(
                     messageId = aiMsg.id,
                     text = aiMsg.text,
                     isUser = false,
-                    timestamp = aiMsg.timestamp,
-                    table = data
+                    timestamp = aiMsg.timestamp
                 ))
             }
         }
@@ -581,8 +557,7 @@ class AiChatViewModel @Inject constructor(
             messageId = aiMsg.id,
             text = aiMsg.text,
             isUser = false,
-            timestamp = aiMsg.timestamp,
-            table = data
+            timestamp = aiMsg.timestamp
         ))
         _uiState.update { it.copy(isLoading = false) }
     }
@@ -625,6 +600,7 @@ class AiChatViewModel @Inject constructor(
         val modelAsset = when (_uiState.value.onDeviceModel) {
             OnDeviceModel.Gemma -> "gem_model.bin"
             OnDeviceModel.TinyFB -> "tinyllama_fb.tflite"
+            OnDeviceModel.SqlTemplate -> "gem_model.bin" // Fallback, but SqlTemplate doesn't use this
         }
         val assistant = LocalMediaPipeSqlAssistant(application, modelAsset)
         val response = assistant.generateResponse(prompt)
