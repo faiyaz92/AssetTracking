@@ -172,6 +172,7 @@ fun ModelSelector(current: AdvancedModel, onSelect: (AdvancedModel) -> Unit) {
                 text = when (current) {
                     AdvancedModel.Gemma -> "Gemma"
                     AdvancedModel.TinyFB -> "TinyLlama"
+                    AdvancedModel.DeepSeekR1 -> "DeepSeek-R1"
                 },
                 color = Color.White
             )
@@ -191,6 +192,13 @@ fun ModelSelector(current: AdvancedModel, onSelect: (AdvancedModel) -> Unit) {
                 text = { Text("TinyLlama") },
                 onClick = {
                     onSelect(AdvancedModel.TinyFB)
+                    expanded = false
+                }
+            )
+            DropdownMenuItem(
+                text = { Text("DeepSeek-R1") },
+                onClick = {
+                    onSelect(AdvancedModel.DeepSeekR1)
                     expanded = false
                 }
             )

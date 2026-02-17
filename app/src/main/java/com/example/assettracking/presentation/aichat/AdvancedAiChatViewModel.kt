@@ -26,7 +26,7 @@ data class AdvancedAiChatState(
     val selectedModel: AdvancedModel = AdvancedModel.Gemma
 )
 
-enum class AdvancedModel { Gemma, TinyFB }
+enum class AdvancedModel { Gemma, TinyFB, DeepSeekR1 }
 
 @HiltViewModel
 class AdvancedAiChatViewModel @Inject constructor(
@@ -65,6 +65,7 @@ class AdvancedAiChatViewModel @Inject constructor(
                 val localModel = when (_uiState.value.selectedModel) {
                     AdvancedModel.Gemma -> LocalModel.Gemma
                     AdvancedModel.TinyFB -> LocalModel.TinyLlama
+                    AdvancedModel.DeepSeekR1 -> LocalModel.DeepSeekR1
                 }
 
                 val modelFile = modelManager.fileFor(localModel)
