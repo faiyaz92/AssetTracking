@@ -26,14 +26,14 @@ class LocalModelManager(private val context: Context) {
             id = model,
             displayName = "Gemma",
             fileName = "gem_model.bin",
-            downloadUrl = "https://drive.google.com/uc?export=download&id=1owAqeZedrKGYhHQU7nIOHHBGFNJ95GTF",
+            downloadUrl = "https://transfer.sh/gem_model.bin", // Replace with your transfer.sh URL
             sizeBytes = 1_150_000_000L
         )
         LocalModel.TinyLlama -> LocalModelInfo(
             id = model,
             displayName = "TinyLlama",
             fileName = "tinyllama_fb.tflite",
-            downloadUrl = "https://drive.google.com/uc?export=download&id=1fTLb6TnnO2-po7iXx0NxIwtPmFsl9Lo5",
+            downloadUrl = "https://huggingface.co/TinyLlama/TinyLlama-1.1B-Chat-v1.0/resolve/main/model.safetensors?download=true",
             sizeBytes = 1_150_000_000L
         )
     }
@@ -55,10 +55,13 @@ class LocalModelManager(private val context: Context) {
 
         val request = Request.Builder()
             .url(info.downloadUrl)
-            .addHeader("User-Agent", "curl/7.68.0")
-            .addHeader("Accept", "*/*")
-            .addHeader("Referer", "https://huggingface.co/")
+            .addHeader("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+            .addHeader("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
+            .addHeader("Accept-Language", "en-US,en;q=0.5")
             .addHeader("Accept-Encoding", "identity")
+            .addHeader("Connection", "keep-alive")
+            .addHeader("Upgrade-Insecure-Requests", "1")
+            .addHeader("Cache-Control", "max-age=0")
             .build()
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) throw IOException("Download failed: ${response.code}")
