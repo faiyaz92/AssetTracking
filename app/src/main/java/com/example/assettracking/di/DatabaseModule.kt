@@ -6,9 +6,8 @@ import com.example.assettracking.data.local.AssetTrackingDatabase
 import com.example.assettracking.data.local.dao.AssetDao
 import com.example.assettracking.data.local.dao.AssetMovementDao
 import com.example.assettracking.data.local.dao.AuditDao
+import com.example.assettracking.data.local.dao.ChatMessageDao
 import com.example.assettracking.data.local.dao.LocationDao
-import com.example.assettracking.data.repository.AssetMovementRepositoryImpl
-import com.example.assettracking.domain.repository.AssetMovementRepository
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -32,8 +31,8 @@ object DatabaseModule {
         ).addMigrations(
             AssetTrackingDatabase.MIGRATION_1_2,
             AssetTrackingDatabase.MIGRATION_2_3,
-            AssetTrackingDatabase.MIGRATION_3_4,
-            AssetTrackingDatabase.MIGRATION_4_5
+            AssetTrackingDatabase.MIGRATION_4_5,
+            AssetTrackingDatabase.MIGRATION_5_6
         ).build()
 
     @Provides
@@ -47,4 +46,7 @@ object DatabaseModule {
 
     @Provides
     fun provideAuditDao(database: AssetTrackingDatabase): AuditDao = database.auditDao()
+
+    @Provides
+    fun provideChatMessageDao(database: AssetTrackingDatabase): ChatMessageDao = database.chatMessageDao()
 }

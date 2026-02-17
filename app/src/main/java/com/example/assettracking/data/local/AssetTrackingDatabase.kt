@@ -7,15 +7,17 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.assettracking.data.local.dao.AssetDao
 import com.example.assettracking.data.local.dao.AssetMovementDao
 import com.example.assettracking.data.local.dao.AuditDao
+import com.example.assettracking.data.local.dao.ChatMessageDao
 import com.example.assettracking.data.local.dao.LocationDao
 import com.example.assettracking.data.local.entity.AssetEntity
 import com.example.assettracking.data.local.entity.AssetMovementEntity
 import com.example.assettracking.data.local.entity.AuditEntity
+import com.example.assettracking.data.local.entity.ChatMessageEntity
 import com.example.assettracking.data.local.entity.LocationEntity
 
 @Database(
-    entities = [LocationEntity::class, AssetEntity::class, AssetMovementEntity::class, AuditEntity::class],
-    version = 5,
+    entities = [LocationEntity::class, AssetEntity::class, AssetMovementEntity::class, AuditEntity::class, ChatMessageEntity::class],
+    version = 6,
     exportSchema = false
 )
 abstract class AssetTrackingDatabase : RoomDatabase() {
@@ -23,6 +25,7 @@ abstract class AssetTrackingDatabase : RoomDatabase() {
     abstract fun assetDao(): AssetDao
     abstract fun assetMovementDao(): AssetMovementDao
     abstract fun auditDao(): AuditDao
+    abstract fun chatMessageDao(): ChatMessageDao
 
     companion object {
         val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -41,10 +44,22 @@ abstract class AssetTrackingDatabase : RoomDatabase() {
             }
         }
 
-        val MIGRATION_3_4 = object : Migration(3, 4) {
+        val MIGRATION_5_6 = object : Migration(5, 6) {
             override fun migrate(database: SupportSQLiteDatabase) {
-                // Add parentId column to locations table
-                database.execSQL("ALTER TABLE locations ADD COLUMN parentId INTEGER")
+                database.execSQL(
+                    """
+                    CREATE TABLE chat_messages (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        message_id TEXT NOT NULL,
+                        text TEXT NOT NULL,
+                        is_user INTEGER NOT NULL,
+                        timestamp INTEGER NOT NULL,
+                        is_write_query INTEGER NOT NULL DEFAULT 0,
+                        query_executed INTEGER NOT NULL DEFAULT 0,
+                        original_query TEXT
+                    )
+                    """
+                )
             }
         }
 

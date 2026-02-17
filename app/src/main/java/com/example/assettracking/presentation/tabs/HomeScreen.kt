@@ -92,6 +92,7 @@ fun HomeScreen(
     onOpenRfidRead: () -> Unit,
     onOpenRfidWrite: () -> Unit,
     onOpenDemoApp: () -> Unit,
+    onOpenAiChat: () -> Unit,
     onLocationScanned: (Long) -> Unit = {},
     rooms: List<LocationSummary> = emptyList(),
     onAssetMoved: (String, Long, String) -> Unit = { _, _, _ -> },
@@ -370,6 +371,25 @@ fun HomeScreen(
                 )
             ),
             onClick = onOpenDemoApp
+        ),
+        DashboardItem(
+            title = "AI Chat",
+            subtitle = "Ask Asset Questions",
+            icon = {
+                Icon(
+                    Icons.Default.Analytics, // Or use a chat icon if available
+                    contentDescription = null,
+                    modifier = Modifier.size(32.dp),
+                    tint = Color.White
+                )
+            },
+            gradient = Brush.verticalGradient(
+                colors = listOf(
+                    Color(0xFF6366F1),
+                    Color(0xFF8B5CF6)
+                )
+            ),
+            onClick = onOpenAiChat
         )
     )
 
