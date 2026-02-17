@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -58,19 +60,20 @@ fun ModelDownloadScreen(
             TopBar(onBack = onBack)
         }
     ) { padding ->
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text(
-                text = "Download AI models for offline chat. Choose from various models with different capabilities and sizes.",
-                style = MaterialTheme.typography.bodyMedium
-            )
+            item {
+                Text(
+                    text = "Download AI models for offline chat. Choose from various models with different capabilities and sizes.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
 
-            LocalModel.values().forEach { model ->
+            items(LocalModel.values()) { model ->
                 val status = state.statuses[model]
                 ModelCard(
                     model = model,
