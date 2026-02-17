@@ -12,6 +12,7 @@ import androidx.navigation.navArgument
 import com.example.assettracking.presentation.assetdetails.AssetDetailsScreen
 import com.example.assettracking.presentation.assets.AssetsScreen
 import com.example.assettracking.presentation.aichat.AiChatScreen
+import com.example.assettracking.presentation.aichat.AdvancedAiChatScreen
 import com.example.assettracking.presentation.audit.AuditDetailScreen
 import com.example.assettracking.presentation.locationdetail.LocationDetailScreen
 import com.example.assettracking.presentation.locationdetail.LocationDetailViewModel
@@ -37,6 +38,7 @@ object Destinations {
     const val RfidRead = "rfid_read"
     const val RfidWrite = "rfid_write"
     const val AiChat = "ai_chat"
+    const val AdvancedAiChat = "advanced_ai_chat"
 }
 
 object Routes {
@@ -52,6 +54,7 @@ object Routes {
     const val RfidRead = Destinations.RfidRead
     const val RfidWrite = Destinations.RfidWrite
     const val AiChat = Destinations.AiChat
+    const val AdvancedAiChat = Destinations.AdvancedAiChat
 }
 
 @Composable
@@ -95,6 +98,7 @@ fun AssetTrackingNavHost(navController: NavHostController) {
                     }
                 },
                 onOpenAiChat = { navController.navigate(Routes.AiChat) },
+                onOpenAdvancedAiChat = { navController.navigate(Routes.AdvancedAiChat) },
                 onLocationScanned = { locationId ->
                     navController.navigate("${Routes.LocationDetail.replace("{locationIdentifier}", locationId.toString())}")
                 },
@@ -180,6 +184,11 @@ fun AssetTrackingNavHost(navController: NavHostController) {
         }
         composable(Routes.AiChat) {
             AiChatScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
+        composable(Routes.AdvancedAiChat) {
+            AdvancedAiChatScreen(
                 onBack = { navController.popBackStack() }
             )
         }

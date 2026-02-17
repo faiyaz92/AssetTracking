@@ -93,6 +93,7 @@ fun HomeScreen(
     onOpenRfidWrite: () -> Unit,
     onOpenDemoApp: () -> Unit,
     onOpenAiChat: () -> Unit,
+    onOpenAdvancedAiChat: () -> Unit,
     onLocationScanned: (Long) -> Unit = {},
     rooms: List<LocationSummary> = emptyList(),
     onAssetMoved: (String, Long, String) -> Unit = { _, _, _ -> },
@@ -390,6 +391,25 @@ fun HomeScreen(
                 )
             ),
             onClick = onOpenAiChat
+        ),
+        DashboardItem(
+            title = "Advanced AI Chat",
+            subtitle = "Intelligent Asset Assistant",
+            icon = {
+                Icon(
+                    Icons.Default.Analytics,
+                    contentDescription = null,
+                    modifier = Modifier.size(32.dp),
+                    tint = Color.White
+                )
+            },
+            gradient = Brush.verticalGradient(
+                colors = listOf(
+                    Color(0xFF059669),
+                    Color(0xFF10B981)
+                )
+            ),
+            onClick = onOpenAdvancedAiChat
         )
     )
 
