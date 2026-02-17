@@ -242,5 +242,8 @@ class LocalSqlFallbackEngine {
         }
 
         return "INSERT INTO locations (${columns.joinToString(", ")}) VALUES (${values.joinToString(", ")})"
+    fun isAssetRelatedQuery(userMessage: String): Boolean {
+        val message = userMessage.lowercase().trim()
+        val assetKeywords = listOf("asset", "location", "room", "audit", "movement", "track", "find", "where", "show", "list", "add", "create", "move", "update", "delete", "inventory", "equipment", "device")
+        return assetKeywords.any { message.contains(it) } || message.matches(Regex("\\d+")) // Numbers might be IDs
     }
-}

@@ -53,11 +53,14 @@ data class AiChatState(
     val messages: List<ChatMessage> = emptyList(),
     val isLoading: Boolean = false,
     val error: String? = null,
-    val mode: AiMode = AiMode.Offline,
-    val lastOptions: List<OptionItem> = emptyList()
+    val mode: AiMode = AiMode.OnDevice,
+    val lastOptions: List<OptionItem> = emptyList(),
+    val onDeviceModel: OnDeviceModel = OnDeviceModel.Gemma
 )
 
-enum class AiMode { Gemini, Offline, Ollama, OnDevice }
+enum class AiMode { Gemini, OnDevice }
+
+enum class OnDeviceModel { Gemma, TinyFB, SqlTemplate }
 
 @HiltViewModel
 class AiChatViewModel @Inject constructor(
@@ -340,25 +343,110 @@ class AiChatViewModel @Inject constructor(
             }
 
             if (mode == AiMode.OnDevice) {
-                // On-device mode: Try ONNX first, fallback to rule-based generation
+                // On-device mode
                 try {
-                    // Load model if not already loaded
-                    if (!isModelLoaded) {
-                        loadOnnxModel()
-                    }
+                    when (_uiState.value.onDeviceModel) {
+                        OnDeviceModel.Gemma, OnDeviceModel.TinyFB -> {
+                            val modelAsset = when (_uiState.value.onDeviceModel) {
+                                OnDeviceModel.Gemma -> "gem_model.bin"
+                                OnDeviceModel.TinyFB -> "tinyllama_fb.tflite"
+                                else -> "gem_model.bin"
+                            }
+                            val assistant = LocalMediaPipeSqlAssistant(application, modelAsset)
 
-                    if (isModelLoaded && ortSession != null) {
-                        // Use ONNX model for inference
-                        val sqlQuery = runOnnxInference("$schemaPrompt\n\nUser: $userMessage\n\nGenerate SQL query:")
-                        handleSql(sqlQuery, messageId)
-                    } else {
-                        // Fallback to rule-based SQL generation (same as Offline mode)
-                        val sqlQuery = generateSqlFromMessage(userMessage)
-                        handleSql(sqlQuery, messageId)
+                            // Check if query is asset-related
+                            if (!assistant.isAssetRelatedQuery(userMessage)) {
+                                // Handle general conversation
+                                val generalPrompt = """
+                                You are a helpful Asset Tracking Assistant. The user said: "$userMessage"
+
+                                This doesn't seem to be an asset-related query. Respond politely and guide them towards asset tracking features.
+                                Keep the response short and friendly.
+                                """.trimIndent()
+                                val response = assistant.generateResponse(generalPrompt)
+                                val aiMsg = ChatMessage(
+                                    id = "${messageId}_response",
+                                    text = response,
+                                    isUser = false
+                                )
+                                chatMessageDao.insert(ChatMessageEntity(
+                                    messageId = aiMsg.id,
+                                    text = aiMsg.text,
+                                    isUser = false,
+                                    timestamp = aiMsg.timestamp
+                                ))
+                                assistant.close()
+                                _uiState.update { it.copy(isLoading = false) }
+                                return@launch
+                            }
+
+                            // Proceed with asset-related query
+                            var sqlQuery = assistant.generateSql(userMessage)
+                            var data: TableData? = null
+                            var error: String? = null
+                            var retryCount = 0
+                            val maxRetries = 2
+
+                            while (retryCount <= maxRetries) {
+                                try {
+                                    data = getQueryData(sqlQuery)
+                                    error = null
+                                    break
+                                } catch (e: Exception) {
+                                    error = e.message ?: "Unknown SQL error"
+                                    if (retryCount < maxRetries) {
+                                        sqlQuery = assistant.generateSqlWithRetry(userMessage, error)
+                                        retryCount++
+                                    } else {
+                                        break
+                                    }
+                                }
+                            }
+
+                            assistant.close()
+
+                            if (error != null) {
+                                // Still error after retries
+                                val aiMsg = ChatMessage(
+                                    id = "${messageId}_response",
+                                    text = "SQL Error after retries: $error\nGenerated SQL: $sqlQuery",
+                                    isUser = false
+                                )
+                                chatMessageDao.insert(ChatMessageEntity(
+                                    messageId = aiMsg.id,
+                                    text = aiMsg.text,
+                                    isUser = false,
+                                    timestamp = aiMsg.timestamp
+                                ))
+                            } else if (data != null) {
+                                handleIntelligentResponse(data, userQuestion, messageId, modelAsset)
+                            }
+                        }
+                        OnDeviceModel.SqlTemplate -> {
+                            val engine = LocalSqlFallbackEngine()
+                            if (!engine.isAssetRelatedQuery(userMessage)) {
+                                // Handle general conversation with simple response
+                                val response = "Hello! I'm your Asset Tracking Assistant. You can ask me about assets, locations, audits, or movements. For example: 'Show all assets' or 'Where is asset 1?'"
+                                val aiMsg = ChatMessage(
+                                    id = "${messageId}_response",
+                                    text = response,
+                                    isUser = false
+                                )
+                                chatMessageDao.insert(ChatMessageEntity(
+                                    messageId = aiMsg.id,
+                                    text = aiMsg.text,
+                                    isUser = false,
+                                    timestamp = aiMsg.timestamp
+                                ))
+                                _uiState.update { it.copy(isLoading = false) }
+                                return@launch
+                            }
+                            val sqlQuery = engine.generate(userMessage) ?: "SELECT * FROM assets LIMIT 5"
+                            handleSqlWithResponse(sqlQuery, userMessage, messageId, generateResponse = false)
+                        }
                     }
                 } catch (e: Exception) {
-                    // If everything fails, use basic fallback
-                    handleSql("SELECT * FROM assets LIMIT 5", messageId)
+                    handleError(e.message ?: "On-device error", messageId)
                 }
                 return@launch
             }
@@ -384,9 +472,164 @@ class AiChatViewModel @Inject constructor(
         _uiState.update { it.copy(mode = mode) }
     }
 
+    fun setOnDeviceModel(model: OnDeviceModel) {
+        _uiState.update { it.copy(onDeviceModel = model) }
+    }
+
     fun retryLastMessage() {
         val message = lastUserMessage ?: return
         sendMessage(message)
+    }
+
+    private suspend fun handleSqlWithResponse(sqlQuery: String, userQuestion: String, messageId: String, generateResponse: Boolean = true) {
+        if (!generateResponse) {
+            handleSql(sqlQuery, messageId)
+            return
+        }
+
+        val isWrite = sqlQuery.startsWith("INSERT", ignoreCase = true) ||
+                sqlQuery.startsWith("UPDATE", ignoreCase = true) ||
+                sqlQuery.startsWith("DELETE", ignoreCase = true)
+
+        if (isWrite) {
+            // For write queries, execute and show result
+            executeQuery(sqlQuery, messageId)
+        } else {
+            // For read queries, execute and generate response
+            val data = getQueryData(sqlQuery)
+            if (data.rows.isEmpty()) {
+                // No data, show table schemas
+                val schemas = getTableSchemas()
+                val response = generateResponseWithModel("User asked: $userQuestion\n\nNo data found. Here are the table schemas:\n$schemas\n\nProvide a helpful response.", userQuestion)
+                val aiMsg = ChatMessage(
+                    id = "${messageId}_response",
+                    text = response,
+                    isUser = false
+                )
+                chatMessageDao.insert(ChatMessageEntity(
+                    messageId = aiMsg.id,
+                    text = aiMsg.text,
+                    isUser = false,
+                    timestamp = aiMsg.timestamp
+                ))
+            } else {
+                // Data found, generate intelligent response
+                val dataText = formatDataAsText(data)
+                val response = generateResponseWithModel("User asked: $userQuestion\n\nData retrieved:\n$dataText\n\nProvide a natural language answer based on this data, confirming if it answers the question.", userQuestion)
+                val aiMsg = ChatMessage(
+                    id = "${messageId}_response",
+                    text = response,
+                    isUser = false,
+                    table = data
+                )
+                chatMessageDao.insert(ChatMessageEntity(
+                    messageId = aiMsg.id,
+                    text = aiMsg.text,
+                    isUser = false,
+                    timestamp = aiMsg.timestamp,
+                    table = data
+                ))
+            }
+        }
+        _uiState.update { it.copy(isLoading = false) }
+    }
+
+    private suspend fun handleIntelligentResponse(data: TableData, userQuestion: String, messageId: String, modelAsset: String) {
+        // Get additional context - all locations and assets summary
+        val allLocations = getQueryData("SELECT id, name, locationCode FROM locations")
+        val allAssets = getQueryData("SELECT id, name, currentRoomId FROM assets")
+        val recentMovements = getQueryData("SELECT a.name AS asset, l1.name AS from_loc, l2.name AS to_loc, am.timestamp FROM asset_movements am JOIN assets a ON am.assetId = a.id LEFT JOIN locations l1 ON am.fromRoomId = l1.id LEFT JOIN locations l2 ON am.toRoomId = l2.id ORDER BY am.timestamp DESC LIMIT 5")
+
+        val contextData = """
+        All Locations: ${formatDataAsText(allLocations)}
+        All Assets: ${formatDataAsText(allAssets)}
+        Recent Movements: ${formatDataAsText(recentMovements)}
+        """.trimIndent()
+
+        val dataText = formatDataAsText(data)
+
+        val intelligentPrompt = """
+        You are an intelligent Asset Tracking Assistant with access to all database data.
+
+        User Question: "$userQuestion"
+
+        Query Results: $dataText
+
+        Full Context:
+        $contextData
+
+        Task: Analyze the query results in the context of all data. Provide a comprehensive, helpful response that:
+        - Answers the user's question directly
+        - Explains the data meaningfully
+        - Suggests related insights or actions if relevant
+        - Confirms if the data fully answers the question or if more information is needed
+
+        Response should be natural, conversational, and decision-supporting.
+        """.trimIndent()
+
+        val assistant = LocalMediaPipeSqlAssistant(application, modelAsset)
+        val response = assistant.generateResponse(intelligentPrompt)
+        assistant.close()
+
+        val aiMsg = ChatMessage(
+            id = "${messageId}_response",
+            text = response,
+            isUser = false,
+            table = data
+        )
+        chatMessageDao.insert(ChatMessageEntity(
+            messageId = aiMsg.id,
+            text = aiMsg.text,
+            isUser = false,
+            timestamp = aiMsg.timestamp,
+            table = data
+        ))
+        _uiState.update { it.copy(isLoading = false) }
+    }
+
+    private suspend fun getQueryData(sqlQuery: String): TableData {
+        val cursor = database.query(sqlQuery, emptyArray())
+        val columns = (0 until cursor.columnCount).map { cursor.getColumnName(it) }
+        val rows = mutableListOf<List<String>>()
+        if (cursor.moveToFirst()) {
+            do {
+                val row = (0 until cursor.columnCount).map { cursor.getString(it) ?: "NULL" }
+                rows.add(row)
+            } while (cursor.moveToNext())
+        }
+        cursor.close()
+        return TableData(columns, rows)
+    }
+
+    private fun getTableSchemas(): String {
+        // Simplified schemas based on your database
+        return """
+        assets: id (INTEGER PRIMARY KEY), name (TEXT), details (TEXT), condition (TEXT), baseRoomId (INTEGER), currentRoomId (INTEGER)
+        locations: id (INTEGER PRIMARY KEY), name (TEXT), description (TEXT), parentId (INTEGER), locationCode (TEXT)
+        asset_movements: id (INTEGER PRIMARY KEY), assetId (INTEGER), fromRoomId (INTEGER), toRoomId (INTEGER), condition (TEXT), timestamp (INTEGER)
+        audits: id (INTEGER PRIMARY KEY), name (TEXT), type (TEXT), includeChildren (INTEGER), locationId (INTEGER), createdAt (INTEGER), finishedAt (INTEGER)
+        """.trimIndent()
+    }
+
+    private fun formatDataAsText(data: TableData): String {
+        val sb = StringBuilder()
+        sb.append("Columns: ${data.columns.joinToString(", ")}\n")
+        sb.append("Rows (${data.rows.size}):\n")
+        data.rows.forEach { row ->
+            sb.append(row.joinToString(" | ")).append("\n")
+        }
+        return sb.toString()
+    }
+
+    private suspend fun generateResponseWithModel(prompt: String, userQuestion: String): String {
+        val modelAsset = when (_uiState.value.onDeviceModel) {
+            OnDeviceModel.Gemma -> "gem_model.bin"
+            OnDeviceModel.TinyFB -> "tinyllama_fb.tflite"
+        }
+        val assistant = LocalMediaPipeSqlAssistant(application, modelAsset)
+        val response = assistant.generateResponse(prompt)
+        assistant.close()
+        return response
     }
 
     private suspend fun handleSql(sqlQuery: String, messageId: String) {
