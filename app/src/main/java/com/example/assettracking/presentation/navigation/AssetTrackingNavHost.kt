@@ -11,9 +11,11 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.example.assettracking.presentation.assetdetails.AssetDetailsScreen
 import com.example.assettracking.presentation.assets.AssetsScreen
+import com.example.assettracking.presentation.aichat.ChatScreen
 import com.example.assettracking.presentation.aichat.AiChatScreen
 import com.example.assettracking.presentation.aichat.AdvancedAiChatScreen
 import com.example.assettracking.presentation.aichat.ModelDownloadScreen
+import com.example.assettracking.presentation.aichat.LocalModel
 import com.example.assettracking.presentation.audit.AuditDetailScreen
 import com.example.assettracking.presentation.locationdetail.LocationDetailScreen
 import com.example.assettracking.presentation.locationdetail.LocationDetailViewModel
@@ -41,6 +43,7 @@ object Destinations {
     const val AiChat = "ai_chat"
     const val AdvancedAiChat = "advanced_ai_chat"
     const val ModelDownload = "model_download"
+    const val Chat = "chat"
 }
 
 object Routes {
@@ -58,6 +61,7 @@ object Routes {
     const val AiChat = Destinations.AiChat
     const val AdvancedAiChat = Destinations.AdvancedAiChat
     const val ModelDownload = Destinations.ModelDownload
+    const val Chat = "${Destinations.Chat}/{modelName}"
 }
 
 @Composable
@@ -103,6 +107,7 @@ fun AssetTrackingNavHost(navController: NavHostController) {
                 onOpenAiChat = { navController.navigate(Routes.AiChat) },
                 onOpenAdvancedAiChat = { navController.navigate(Routes.AdvancedAiChat) },
                 onOpenModelDownload = { navController.navigate(Routes.ModelDownload) },
+                onOpenChat = { navController.navigate("${Destinations.Chat}/${LocalModel.Gemma.name}") },
                 onLocationScanned = { locationId ->
                     navController.navigate("${Routes.LocationDetail.replace("{locationIdentifier}", locationId.toString())}")
                 },
@@ -198,6 +203,20 @@ fun AssetTrackingNavHost(navController: NavHostController) {
         }
         composable(Routes.ModelDownload) {
             ModelDownloadScreen(
+                onBack = { navController.popBackStack() },
+                onChatWithModel = { model ->
+                    navController.navigate("${Destinations.Chat}/${model.name}")
+                }
+            )
+        }
+        composable(
+            Routes.Chat,
+            arguments = listOf(navArgument("modelName") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val modelName = backStackEntry.arguments?.getString("modelName") ?: LocalModel.Gemma.name
+            val selectedModel = LocalModel.valueOf(modelName)
+            ChatScreen(
+                selectedModel = selectedModel,
                 onBack = { navController.popBackStack() }
             )
         }

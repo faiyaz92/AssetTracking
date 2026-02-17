@@ -96,6 +96,7 @@ fun HomeScreen(
     onOpenAiChat: () -> Unit,
     onOpenAdvancedAiChat: () -> Unit,
     onOpenModelDownload: () -> Unit,
+    onOpenChat: () -> Unit,
     onLocationScanned: (Long) -> Unit = {},
     rooms: List<LocationSummary> = emptyList(),
     onAssetMoved: (String, Long, String) -> Unit = { _, _, _ -> },
@@ -431,6 +432,25 @@ fun HomeScreen(
                 )
             ),
             onClick = onOpenModelDownload
+        ),
+        DashboardItem(
+            title = "AI Chat",
+            subtitle = "Chat with Downloaded Models",
+            icon = {
+                Icon(
+                    Icons.Default.CheckCircle,
+                    contentDescription = null,
+                    modifier = Modifier.size(32.dp),
+                    tint = Color.White
+                )
+            },
+            gradient = Brush.verticalGradient(
+                colors = listOf(
+                    Color(0xFF7C3AED),
+                    Color(0xFF8B5CF6)
+                )
+            ),
+            onClick = onOpenChat
         )
     )
 

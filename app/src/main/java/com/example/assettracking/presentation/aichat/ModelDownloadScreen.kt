@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.Button
@@ -21,6 +22,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -32,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -41,6 +44,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 @Composable
 fun ModelDownloadScreen(
     onBack: () -> Unit,
+    onChatWithModel: (LocalModel) -> Unit,
     viewModel: ModelDownloadViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -62,7 +66,7 @@ fun ModelDownloadScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
-                text = "Download on-device models for offline AI.",
+                text = "Download AI models for offline chat. Choose from various models with different capabilities and sizes.",
                 style = MaterialTheme.typography.bodyMedium
             )
 
@@ -71,7 +75,8 @@ fun ModelDownloadScreen(
                 ModelCard(
                     model = model,
                     status = status,
-                    onDownload = { viewModel.download(model) }
+                    onDownload = { viewModel.download(model) },
+                    onChat = { onChatWithModel(model) }
                 )
             }
         }
@@ -111,12 +116,17 @@ private fun TopBar(onBack: () -> Unit) {
 private fun ModelCard(
     model: LocalModel,
     status: ModelStatus?,
-    onDownload: () -> Unit
+    onDownload: () -> Unit,
+    onChat: () -> Unit
 ) {
-    val (title, description) = remember(model) {
-        when (model) {
-            LocalModel.Gemma -> "Gemma" to "Balanced responses; larger size"
-            LocalModel.TinyLlama -> "TinyLlama" to "Smaller; faster on-device"
+    val modelManager = LocalModelManager(LocalContext.current)
+    val modelInfo = remember(model) { modelManager.infoFor(model) }
+    
+    val sizeText = remember(modelInfo.sizeBytes) {
+        when {
+            modelInfo.sizeBytes >= 1_000_000_000 -> "%.1f GB".format(modelInfo.sizeBytes / 1_000_000_000.0)
+            modelInfo.sizeBytes >= 1_000_000 -> "%.1f MB".format(modelInfo.sizeBytes / 1_000_000.0)
+            else -> "%.1f KB".format(modelInfo.sizeBytes / 1_000.0)
         }
     }
 
@@ -125,10 +135,64 @@ private fun ModelCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(description, style = MaterialTheme.typography.bodySmall)
-            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        modelInfo.displayName, 
+                        style = MaterialTheme.typography.titleMedium, 
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        "${sizeText} • ${modelInfo.minMemoryGB}GB RAM required", 
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                
+                // Feature badges
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (modelInfo.supportsImage) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(
+                                "🖼️ Vision",
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                    if (modelInfo.supportsAudio) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(
+                                "🎵 Audio",
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
+            }
+            
+            if (modelInfo.description.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    modelInfo.description, 
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(12.dp))
 
             val isDownloaded = status?.isDownloaded == true
             val isDownloading = status?.progress in 1..99
@@ -166,12 +230,12 @@ private fun ModelCard(
                         }
                     }
                     isDownloaded -> {
-                        Text("Downloaded", color = MaterialTheme.colorScheme.primary)
+                        Text("✅ Downloaded", color = MaterialTheme.colorScheme.primary)
                     }
                     status?.error != null -> {
                         val errorText = status.error ?: ""
                         Column {
-                            Text("Failed: $errorText", color = MaterialTheme.colorScheme.error)
+                            Text("❌ Failed: $errorText", color = MaterialTheme.colorScheme.error)
                             Button(onClick = onDownload, modifier = Modifier.padding(top = 8.dp)) {
                                 Text("Retry Download")
                             }
@@ -181,13 +245,22 @@ private fun ModelCard(
                         Button(onClick = onDownload) {
                             Text("Download")
                         }
+                        // Chat button commented out until LiteRT-LM is properly configured
+                        /*
+                        if (isDownloaded) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Button(onClick = onChat) {
+                                Text("Chat")
+                            }
+                        }
+                        */
                     }
                 }
             }
 
             status?.filePath?.let {
                 Spacer(modifier = Modifier.height(6.dp))
-                Text("Path: $it", style = MaterialTheme.typography.bodySmall)
+                Text("📁 Path: $it", style = MaterialTheme.typography.bodySmall)
             }
         }
     }
