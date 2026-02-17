@@ -26,17 +26,17 @@ class LocalModelManager(private val context: Context) {
             id = model,
             displayName = "Gemma",
             fileName = "gem_model.bin",
-            // TODO: Replace with your actual Gemma download URL
-            downloadUrl = "https://example.com/gem_model.bin",
-            sizeBytes = 1_200_000_000L
+            // HuggingFace LiteRT Gemma3 1B IT int4 task
+            downloadUrl = "https://huggingface.co/litert-community/Gemma3-1B-IT/resolve/main/gemma3-1b-it-int4.task",
+            sizeBytes = 1_150_000_000L
         )
         LocalModel.TinyLlama -> LocalModelInfo(
             id = model,
             displayName = "TinyLlama",
             fileName = "tinyllama_fb.tflite",
-            // TODO: Replace with your actual TinyLlama download URL
-            downloadUrl = "https://example.com/tinyllama_fb.tflite",
-            sizeBytes = 1_200_000_000L
+            // HuggingFace LiteRT TinyLlama 1.1B Chat q8 multi-prefill
+            downloadUrl = "https://huggingface.co/litert-community/TinyLlama-1.1B-Chat-v1.0/resolve/main/TinyLlama-1.1B-Chat-v1.0_multi-prefill-seq_q8_ekv1280.task",
+            sizeBytes = 1_150_000_000L
         )
     }
 
