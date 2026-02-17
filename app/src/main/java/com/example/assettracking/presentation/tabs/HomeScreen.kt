@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Analytics
+import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
@@ -94,6 +95,7 @@ fun HomeScreen(
     onOpenDemoApp: () -> Unit,
     onOpenAiChat: () -> Unit,
     onOpenAdvancedAiChat: () -> Unit,
+    onOpenModelDownload: () -> Unit,
     onLocationScanned: (Long) -> Unit = {},
     rooms: List<LocationSummary> = emptyList(),
     onAssetMoved: (String, Long, String) -> Unit = { _, _, _ -> },
@@ -410,6 +412,25 @@ fun HomeScreen(
                 )
             ),
             onClick = onOpenAdvancedAiChat
+        ),
+        DashboardItem(
+            title = "Model Downloads",
+            subtitle = "Download Gemma/TinyLlama",
+            icon = {
+                Icon(
+                    Icons.Default.CloudDownload,
+                    contentDescription = null,
+                    modifier = Modifier.size(32.dp),
+                    tint = Color.White
+                )
+            },
+            gradient = Brush.verticalGradient(
+                colors = listOf(
+                    Color(0xFF0EA5E9),
+                    Color(0xFF38BDF8)
+                )
+            ),
+            onClick = onOpenModelDownload
         )
     )
 

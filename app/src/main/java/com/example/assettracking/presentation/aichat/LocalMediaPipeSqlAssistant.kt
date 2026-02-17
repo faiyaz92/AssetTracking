@@ -2,7 +2,6 @@ package com.example.assettracking.presentation.aichat
 
 import android.content.Context
 import com.google.mediapipe.tasks.genai.llminference.LlmInference
-import java.io.File
 
 /**
  * Local SQL assistant backed by MediaPipe LLM Inference.
@@ -14,12 +13,10 @@ import java.io.File
  */
 class LocalMediaPipeSqlAssistant(
     private val context: Context,
-    private val modelAssetPath: String = "gem_model.bin"
+    private val modelPath: String
 ) : AutoCloseable {
 
     private val llmInference: LlmInference by lazy {
-        val modelPath = ensureModelInInternalStorage(modelAssetPath)
-
         val options = LlmInference.LlmInferenceOptions.builder()
             .setModelPath(modelPath)
             .setMaxTokens(512)
@@ -119,18 +116,6 @@ class LocalMediaPipeSqlAssistant(
             statement.startsWith("WITH", ignoreCase = true)
 
         return if (startsLikeSql) statement else "SELECT 1;"
-    }
-
-    private fun ensureModelInInternalStorage(assetName: String): String {
-        val outFile = File(context.filesDir, assetName)
-        if (!outFile.exists()) {
-            context.assets.open(assetName).use { input ->
-                outFile.outputStream().use { output ->
-                    input.copyTo(output)
-                }
-            }
-        }
-        return outFile.absolutePath
     }
 
     fun isAssetRelatedQuery(userQuestion: String): Boolean {

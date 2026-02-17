@@ -2,7 +2,6 @@ package com.example.assettracking.presentation.aichat
 
 import android.content.Context
 import com.google.mediapipe.tasks.genai.llminference.LlmInference
-import java.io.File
 
 /**
  * Advanced AI Engine for generating intelligent HTML responses.
@@ -10,12 +9,10 @@ import java.io.File
  */
 class AdvancedAiEngine(
     private val context: Context,
-    private val modelAssetPath: String = "gem_model.bin"
+    private val modelPath: String
 ) : AutoCloseable {
 
     private val llmInference: LlmInference by lazy {
-        val modelPath = ensureModelInInternalStorage(modelAssetPath)
-
         val options = LlmInference.LlmInferenceOptions.builder()
             .setModelPath(modelPath)
             .setMaxTokens(1024)  // Increased for richer responses
@@ -83,19 +80,6 @@ class AdvancedAiEngine(
             // Fallback: wrap in basic HTML if not HTML
             "<p>$trimmed</p>"
         }
-    }
-
-    private fun ensureModelInInternalStorage(assetPath: String): String {
-        val assetManager = context.assets
-        val file = File(context.filesDir, assetPath)
-        if (!file.exists()) {
-            assetManager.open(assetPath).use { input ->
-                file.outputStream().use { output ->
-                    input.copyTo(output)
-                }
-            }
-        }
-        return file.absolutePath
     }
 
     override fun close() {

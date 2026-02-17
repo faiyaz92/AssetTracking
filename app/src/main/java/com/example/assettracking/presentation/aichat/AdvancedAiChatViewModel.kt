@@ -37,6 +37,8 @@ class AdvancedAiChatViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(AdvancedAiChatState())
     val uiState: StateFlow<AdvancedAiChatState> = _uiState
 
+    private val modelManager = LocalModelManager(application)
+
     init {
         viewModelScope.launch {
             // Load previous messages if needed, but for now, start fresh
@@ -60,12 +62,24 @@ class AdvancedAiChatViewModel @Inject constructor(
             _uiState.update { it.copy(isLoading = true, error = null) }
 
             try {
-                val modelAsset = when (_uiState.value.selectedModel) {
-                    AdvancedModel.Gemma -> "gem_model.bin"
-                    AdvancedModel.TinyFB -> "tinyllama_fb.tflite"
+                val localModel = when (_uiState.value.selectedModel) {
+                    AdvancedModel.Gemma -> LocalModel.Gemma
+                    AdvancedModel.TinyFB -> LocalModel.TinyLlama
                 }
 
-                val engine = AdvancedAiEngine(application, modelAsset)
+                val modelFile = modelManager.fileFor(localModel)
+                if (!modelFile.exists()) {
+                    _uiState.update {
+                        it.copy(
+                            messages = it.messages + userMsg,
+                            isLoading = false,
+                            error = "Selected model not downloaded. Please download it first."
+                        )
+                    }
+                    return@launch
+                }
+
+                val engine = AdvancedAiEngine(application, modelFile.absolutePath)
                 val htmlResponse = engine.generateResponse(userMessage)
                 engine.close()
 

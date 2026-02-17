@@ -13,6 +13,7 @@ import com.example.assettracking.presentation.assetdetails.AssetDetailsScreen
 import com.example.assettracking.presentation.assets.AssetsScreen
 import com.example.assettracking.presentation.aichat.AiChatScreen
 import com.example.assettracking.presentation.aichat.AdvancedAiChatScreen
+import com.example.assettracking.presentation.aichat.ModelDownloadScreen
 import com.example.assettracking.presentation.audit.AuditDetailScreen
 import com.example.assettracking.presentation.locationdetail.LocationDetailScreen
 import com.example.assettracking.presentation.locationdetail.LocationDetailViewModel
@@ -39,6 +40,7 @@ object Destinations {
     const val RfidWrite = "rfid_write"
     const val AiChat = "ai_chat"
     const val AdvancedAiChat = "advanced_ai_chat"
+    const val ModelDownload = "model_download"
 }
 
 object Routes {
@@ -55,6 +57,7 @@ object Routes {
     const val RfidWrite = Destinations.RfidWrite
     const val AiChat = Destinations.AiChat
     const val AdvancedAiChat = Destinations.AdvancedAiChat
+    const val ModelDownload = Destinations.ModelDownload
 }
 
 @Composable
@@ -99,6 +102,7 @@ fun AssetTrackingNavHost(navController: NavHostController) {
                 },
                 onOpenAiChat = { navController.navigate(Routes.AiChat) },
                 onOpenAdvancedAiChat = { navController.navigate(Routes.AdvancedAiChat) },
+                onOpenModelDownload = { navController.navigate(Routes.ModelDownload) },
                 onLocationScanned = { locationId ->
                     navController.navigate("${Routes.LocationDetail.replace("{locationIdentifier}", locationId.toString())}")
                 },
@@ -189,6 +193,11 @@ fun AssetTrackingNavHost(navController: NavHostController) {
         }
         composable(Routes.AdvancedAiChat) {
             AdvancedAiChatScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
+        composable(Routes.ModelDownload) {
+            ModelDownloadScreen(
                 onBack = { navController.popBackStack() }
             )
         }

@@ -83,6 +83,8 @@ class AiChatViewModel @Inject constructor(
 
     private val okHttpClient = OkHttpClient()
 
+    private val modelManager = LocalModelManager(application)
+
     // ONNX Runtime for on-device LLM inference
     private val ortEnvironment = OrtEnvironment.getEnvironment()
     private var ortSession: OrtSession? = null
@@ -324,12 +326,23 @@ class AiChatViewModel @Inject constructor(
                 try {
                     when (_uiState.value.onDeviceModel) {
                         OnDeviceModel.Gemma, OnDeviceModel.TinyFB -> {
-                            val modelAsset = when (_uiState.value.onDeviceModel) {
-                                OnDeviceModel.Gemma -> "gem_model.bin"
-                                OnDeviceModel.TinyFB -> "tinyllama_fb.tflite"
-                                else -> "gem_model.bin"
+                            val localModel = when (_uiState.value.onDeviceModel) {
+                                OnDeviceModel.Gemma -> LocalModel.Gemma
+                                OnDeviceModel.TinyFB -> LocalModel.TinyLlama
+                                else -> LocalModel.Gemma
                             }
-                            val assistant = LocalMediaPipeSqlAssistant(application, modelAsset)
+                            val modelFile = modelManager.fileFor(localModel)
+                            if (!modelFile.exists()) {
+                                _uiState.update {
+                                    it.copy(
+                                        isLoading = false,
+                                        error = "Selected model not downloaded. Please download it from the Model Downloads screen."
+                                    )
+                                }
+                                return@launch
+                            }
+
+                            val assistant = LocalMediaPipeSqlAssistant(application, modelFile.absolutePath)
 
                             // Check if query is asset-related
                             if (!assistant.isAssetRelatedQuery(userMessage)) {
@@ -396,7 +409,7 @@ class AiChatViewModel @Inject constructor(
                                     timestamp = aiMsg.timestamp
                                 ))
                             } else if (data != null) {
-                                handleIntelligentResponse(data, userMessage, messageId, modelAsset)
+                                handleIntelligentResponse(data, userMessage, messageId, modelFile.absolutePath)
                             }
                         }
                         OnDeviceModel.SqlTemplate -> {
@@ -510,7 +523,7 @@ class AiChatViewModel @Inject constructor(
         _uiState.update { it.copy(isLoading = false) }
     }
 
-    private suspend fun handleIntelligentResponse(data: TableData, userQuestion: String, messageId: String, modelAsset: String) {
+    private suspend fun handleIntelligentResponse(data: TableData, userQuestion: String, messageId: String, modelPath: String) {
         // Get additional context - all locations and assets summary
         val allLocations = getQueryData("SELECT id, name, locationCode FROM locations")
         val allAssets = getQueryData("SELECT id, name, currentRoomId FROM assets")
@@ -543,7 +556,7 @@ class AiChatViewModel @Inject constructor(
         Response should be natural, conversational, and decision-supporting.
         """.trimIndent()
 
-        val assistant = LocalMediaPipeSqlAssistant(application, modelAsset)
+        val assistant = LocalMediaPipeSqlAssistant(application, modelPath)
         val response = assistant.generateResponse(intelligentPrompt)
         assistant.close()
 
@@ -597,12 +610,16 @@ class AiChatViewModel @Inject constructor(
     }
 
     private suspend fun generateResponseWithModel(prompt: String, userQuestion: String): String {
-        val modelAsset = when (_uiState.value.onDeviceModel) {
-            OnDeviceModel.Gemma -> "gem_model.bin"
-            OnDeviceModel.TinyFB -> "tinyllama_fb.tflite"
-            OnDeviceModel.SqlTemplate -> "gem_model.bin" // Fallback, but SqlTemplate doesn't use this
+        val localModel = when (_uiState.value.onDeviceModel) {
+            OnDeviceModel.Gemma -> LocalModel.Gemma
+            OnDeviceModel.TinyFB -> LocalModel.TinyLlama
+            OnDeviceModel.SqlTemplate -> LocalModel.Gemma // Not used, but keep mapping
         }
-        val assistant = LocalMediaPipeSqlAssistant(application, modelAsset)
+        val modelFile = modelManager.fileFor(localModel)
+        if (!modelFile.exists()) {
+            return "Model not downloaded. Please download the selected model before asking questions."
+        }
+        val assistant = LocalMediaPipeSqlAssistant(application, modelFile.absolutePath)
         val response = assistant.generateResponse(prompt)
         assistant.close()
         return response
