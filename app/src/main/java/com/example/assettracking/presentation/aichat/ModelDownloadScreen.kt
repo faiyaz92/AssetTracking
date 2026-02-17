@@ -15,7 +15,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -141,10 +141,28 @@ private fun ModelCard(
             ) {
                 when {
                     isDownloading -> {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            CircularProgressIndicator(progress = progress / 100f)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Downloading... $progress%")
+                        Column {
+                            LinearProgressIndicator(
+                                progress = progress / 100f,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Downloading... $progress%", style = MaterialTheme.typography.bodySmall)
+                                status?.downloadSpeed?.let {
+                                    Text(it, style = MaterialTheme.typography.bodySmall)
+                                }
+                            }
+                            val downloaded = status?.downloadedBytes ?: 0
+                            val total = status?.totalBytes ?: 0
+                            if (total > 0) {
+                                val downloadedMB = downloaded / 1_000_000.0
+                                val totalMB = total / 1_000_000.0
+                                Text("%.1f MB / %.1f MB".format(downloadedMB, totalMB), style = MaterialTheme.typography.bodySmall)
+                            }
                         }
                     }
                     isDownloaded -> {

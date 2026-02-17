@@ -47,7 +47,7 @@ class LocalModelManager(private val context: Context) {
 
     suspend fun downloadModel(
         model: LocalModel,
-        onProgress: (Int) -> Unit = {}
+        onProgress: (progress: Int, downloadedBytes: Long, totalBytes: Long) -> Unit = { _, _, _ -> }
     ): File = withContext(Dispatchers.IO) {
         val info = infoFor(model)
         val targetFile = fileFor(model)
@@ -68,15 +68,24 @@ class LocalModelManager(private val context: Context) {
 
             body.byteStream().use { input ->
                 tmpFile.outputStream().use { output ->
-                    copyWithProgress(input, output, total, onProgress)
+                    copyWithProgress(input, output, total) { progress, downloadedBytes ->
+                        onProgress(progress, downloadedBytes, total)
+                    }
                 }
             }
+        }
+
+        // Check file size
+        val downloadedSize = tmpFile.length()
+        if (downloadedSize < info.sizeBytes * 0.9) { // Allow 10% tolerance
+            tmpFile.delete()
+            throw IOException("Downloaded file size (${downloadedSize} bytes) is too small. Expected ~${info.sizeBytes} bytes. Download may have failed.")
         }
 
         // Replace old file if exists
         if (targetFile.exists()) targetFile.delete()
         if (!tmpFile.renameTo(targetFile)) throw IOException("Failed to rename temp model file")
-        onProgress(100)
+        onProgress(100, downloadedSize, info.sizeBytes)
         return@withContext targetFile
     }
 
@@ -84,8 +93,8 @@ class LocalModelManager(private val context: Context) {
         input: InputStream,
         output: OutputStream,
         totalBytes: Long,
-        onProgress: (Int) -> Unit
-    ) {
+        onProgress: (progress: Int, downloadedBytes: Long) -> Unit
+    ): Long {
         val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
         var bytesCopied: Long = 0
         var read: Int
@@ -96,9 +105,10 @@ class LocalModelManager(private val context: Context) {
             bytesCopied += read
             if (totalBytes > 0) {
                 val progress = ((bytesCopied.toDouble() / totalBytes.toDouble()) * 100).roundToInt().coerceIn(0, 100)
-                onProgress(progress)
+                onProgress(progress, bytesCopied)
             }
         }
+        return bytesCopied
     }
 }
 
@@ -116,5 +126,8 @@ data class ModelStatus(
     val isDownloaded: Boolean,
     val progress: Int = 0,
     val error: String? = null,
-    val filePath: String? = null
+    val filePath: String? = null,
+    val downloadedBytes: Long = 0,
+    val totalBytes: Long = 0,
+    val downloadSpeed: String? = null
 )
