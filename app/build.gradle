@@ -1,18 +1,19 @@
 plugins {
     id 'com.android.application'
     id 'org.jetbrains.kotlin.android'
+    id 'org.jetbrains.kotlin.plugin.compose'
     id 'kotlin-kapt'
     id 'com.google.dagger.hilt.android'
 }
 
 android {
     namespace 'com.example.assettracking'
-    compileSdk 34
+    compileSdk 35
 
     defaultConfig {
         applicationId "com.example.assettracking"
         minSdk 26
-        targetSdk 34
+        targetSdk 35
         versionCode 1
         versionName "1.0"
 
@@ -37,9 +38,6 @@ android {
     }
     buildFeatures {
         compose true
-    }
-    composeOptions {
-        kotlinCompilerExtensionVersion '1.5.10'
     }
     packagingOptions {
         resources {
@@ -70,14 +68,14 @@ dependencies {
 
     implementation 'androidx.lifecycle:lifecycle-viewmodel-compose:2.6.2'
     implementation 'androidx.navigation:navigation-compose:2.6.0'
-    implementation 'androidx.hilt:hilt-navigation-compose:1.0.0'
+    implementation 'androidx.hilt:hilt-navigation-compose:1.3.0'
 
-    implementation 'androidx.room:room-runtime:2.6.1'
-    implementation 'androidx.room:room-ktx:2.6.1'
-    kapt 'androidx.room:room-compiler:2.6.1'
+    implementation 'androidx.room:room-runtime:2.7.0'
+    implementation 'androidx.room:room-ktx:2.7.0'
+    kapt 'androidx.room:room-compiler:2.7.0'
 
-    implementation 'com.google.dagger:hilt-android:2.51.1'
-    kapt 'com.google.dagger:hilt-android-compiler:2.51.1'
+    implementation 'com.google.dagger:hilt-android:2.57.2'
+    kapt 'com.google.dagger:hilt-android-compiler:2.57.2'
 
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.6.4'
 
@@ -89,20 +87,23 @@ dependencies {
     // Chainway C72 UHF RFID SDK
     implementation files('libs/DeviceAPI_ver20250209_release.aar')
 
-    // Google AI for Gemini
-    implementation 'com.google.ai.client.generativeai:generativeai:0.2.2'
-
     // OkHttp for model downloads
     implementation 'com.squareup.okhttp3:okhttp:4.12.0'
 
     // ONNX Runtime for on-device LLM
     implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.18.0'
 
-    // LiteRT-LM for on-device LLM inference
-    // implementation 'com.google.ai.edge:litertlm:0.1.0'
-
     // MediaPipe GenAI for local SQL generation
     implementation 'com.google.mediapipe:tasks-genai:0.10.14'
+
+    // LiteRT-LM (on-device .litertlm models / DeepSeek). Gallery uses 0.9.0-alpha02.
+    // NOTE: removed during troubleshooting because the library brings Kotlin
+    // metadata incompatible with current kapt/Room settings. To integrate
+    // LiteRT-LM safely, upgrade Kotlin and Room (see next steps).
+    // Local integration module (contains LiteRT-LM) — keep off the compile/kapt
+    // classpath to avoid metadata conflicts. Use runtimeOnly so module is not
+    // visible to annotation processors.
+    // runtimeOnly project(':litertlm_integration')
 
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation composeBom
@@ -115,4 +116,11 @@ dependencies {
 
 kapt {
     correctErrorTypes true
+    useBuildCache true
+    includeCompileClasspath false
+    arguments {
+        arg("kotlin.experimental.tryK2", "true")
+        arg("kapt.kotlin.generated", "build/generated/source/kapt")
+        arg("room.processing.isolation.enabled", "true")
+    }
 }

@@ -15,3 +15,4 @@ dependencyResolutionManagement {
 }
 rootProject.name = "AssetTracking"
 include ':app'
+include ':litertlm_integration'

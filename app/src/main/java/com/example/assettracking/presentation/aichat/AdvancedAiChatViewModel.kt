@@ -80,6 +80,20 @@ class AdvancedAiChatViewModel @Inject constructor(
                     return@launch
                 }
 
+                // Check if model file is complete by comparing size
+                val expectedSize = modelManager.infoFor(localModel).sizeBytes
+                val actualSize = modelFile.length()
+                if (actualSize < expectedSize * 0.9) { // Allow 10% tolerance for download issues
+                    _uiState.update {
+                        it.copy(
+                            messages = it.messages + userMsg,
+                            isLoading = false,
+                            error = "Model file appears incomplete. Expected: ${expectedSize / (1024*1024)}MB, Got: ${actualSize / (1024*1024)}MB. Please re-download."
+                        )
+                    }
+                    return@launch
+                }
+
                 val engine = AdvancedAiEngine(application, modelFile.absolutePath)
                 val htmlResponse = engine.generateResponse(userMessage)
                 engine.close()

@@ -1,0 +1,16 @@
+-- Merging decision tree log ---
+manifest
+ADDED from /Users/faiyaz/AndroidStudioProjects/AssetTracking/AssetTracking/litertlm_integration/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest10114136853282454789.xml:2:13-83
+INJECTED from /Users/faiyaz/AndroidStudioProjects/AssetTracking/AssetTracking/litertlm_integration/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest10114136853282454789.xml:2:13-83
+	package
+		INJECTED from /Users/faiyaz/AndroidStudioProjects/AssetTracking/AssetTracking/litertlm_integration/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest10114136853282454789.xml
+	xmlns:android
+		ADDED from /Users/faiyaz/AndroidStudioProjects/AssetTracking/AssetTracking/litertlm_integration/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest10114136853282454789.xml:2:23-81
+uses-sdk
+INJECTED from /Users/faiyaz/AndroidStudioProjects/AssetTracking/AssetTracking/litertlm_integration/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest10114136853282454789.xml reason: use-sdk injection requested
+INJECTED from /Users/faiyaz/AndroidStudioProjects/AssetTracking/AssetTracking/litertlm_integration/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest10114136853282454789.xml
+INJECTED from /Users/faiyaz/AndroidStudioProjects/AssetTracking/AssetTracking/litertlm_integration/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest10114136853282454789.xml
+	android:targetSdkVersion
+		INJECTED from /Users/faiyaz/AndroidStudioProjects/AssetTracking/AssetTracking/litertlm_integration/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest10114136853282454789.xml
+	android:minSdkVersion
+		INJECTED from /Users/faiyaz/AndroidStudioProjects/AssetTracking/AssetTracking/litertlm_integration/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest10114136853282454789.xml
