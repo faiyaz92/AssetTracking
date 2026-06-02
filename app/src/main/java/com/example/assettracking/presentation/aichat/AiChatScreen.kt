@@ -72,7 +72,7 @@ fun AiChatScreen(
                         }
                     },
                     actions = {
-                        ModeMenu(current = state.mode, onSelect = { viewModel.setMode(it) })
+                        ModeMenu(current = state.mode, onSelect = { viewModel.setMode(it) }, currentModel = state.onDeviceModel, onModelSelect = { viewModel.setOnDeviceModel(it) })
                         IconButton(onClick = { viewModel.clearMessages() }) {
                             Icon(Icons.Default.Clear, "Clear Chat", tint = Color.White)
                         }
@@ -181,16 +181,14 @@ fun AiChatScreen(
     }
 }
 @Composable
-private fun ModeMenu(current: AiMode, onSelect: (AiMode) -> Unit) {
+private fun ModeMenu(current: AiMode, onSelect: (AiMode) -> Unit, currentModel: OnDeviceModel, onModelSelect: (OnDeviceModel) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Box {
         TextButton(onClick = { expanded = true }) {
             Text(
                 text = when (current) {
                     AiMode.Gemini -> "Gemini"
-                    AiMode.Offline -> "Offline"
-                    AiMode.Ollama -> "Ollama"
-                    AiMode.OnDevice -> "OnDevice"
+                    AiMode.OnDevice -> "OnDevice (${currentModel.name})"
                 },
                 color = Color.White
             )
@@ -205,24 +203,27 @@ private fun ModeMenu(current: AiMode, onSelect: (AiMode) -> Unit) {
                 }
             )
             DropdownMenuItem(
-                text = { Text("Offline") },
-                onClick = {
-                    expanded = false
-                    onSelect(AiMode.Offline)
-                }
-            )
-            DropdownMenuItem(
-                text = { Text("Ollama") },
-                onClick = {
-                    expanded = false
-                    onSelect(AiMode.Ollama)
-                }
-            )
-            DropdownMenuItem(
-                text = { Text("OnDevice") },
+                text = { Text("OnDevice - Gemma") },
                 onClick = {
                     expanded = false
                     onSelect(AiMode.OnDevice)
+                    onModelSelect(OnDeviceModel.Gemma)
+                }
+            )
+            DropdownMenuItem(
+                text = { Text("OnDevice - TinyFB") },
+                onClick = {
+                    expanded = false
+                    onSelect(AiMode.OnDevice)
+                    onModelSelect(OnDeviceModel.TinyFB)
+                }
+            )
+            DropdownMenuItem(
+                text = { Text("OnDevice - SqlTemplate") },
+                onClick = {
+                    expanded = false
+                    onSelect(AiMode.OnDevice)
+                    onModelSelect(OnDeviceModel.SqlTemplate)
                 }
             )
         }
